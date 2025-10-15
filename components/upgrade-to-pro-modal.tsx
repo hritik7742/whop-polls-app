@@ -42,7 +42,7 @@ export function UpgradeToProModal({ open, onOpenChange }: UpgradeToProModalProps
       });
       
       if (res.status === "ok") {
-        console.log('Payment successful!', res.data.receipt_id);
+        console.log('Payment successful!', res.data.receiptId);
         setIsLoading(false);
         onOpenChange(false);
         // You can add success toast or redirect logic here

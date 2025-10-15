@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { UserPollUsage } from '@/lib/db/user-subscription-functions';
 
 interface UseUserSubscriptionProps {
@@ -54,9 +54,9 @@ export function useUserSubscription({ userId, companyId, experienceId }: UseUser
 
   // Set up real-time subscription for user subscription changes
   useEffect(() => {
-    if (!userId || !companyId || !experienceId) return;
+    if (!userId || !companyId || !experienceId || !supabase) return;
 
-    const supabase = createClient();
+    // supabase is already imported
     
     // Subscribe to user_subscriptions table changes
     const subscription = supabase

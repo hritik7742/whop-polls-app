@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { whopSdk } from '@/lib/whop-sdk';
 import { createPoll, CreatePollData } from '@/lib/db/polls';
 import { createPollSchema } from '@/lib/validation';
+import { canUserCreatePoll, initializeUserSubscription } from '@/lib/db/user-subscription-functions';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,6 +38,19 @@ export async function POST(request: NextRequest) {
 
     if (!accessResult.hasAccess || accessResult.accessLevel !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Initialize user subscription if not exists
+    await initializeUserSubscription(userId, company_id, experience_id);
+
+    // Check if user can create more polls
+    const canCreate = await canUserCreatePoll(userId, company_id, experience_id);
+    if (!canCreate) {
+      return NextResponse.json({ 
+        error: 'Poll limit reached',
+        message: 'You have reached the maximum number of polls for the free plan. Please upgrade to Pro to create unlimited polls.',
+        requiresUpgrade: true
+      }, { status: 403 });
     }
 
     // Create poll data

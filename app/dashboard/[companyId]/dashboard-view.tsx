@@ -14,6 +14,7 @@ import { UpgradeToProModal } from '@/components/upgrade-to-pro-modal';
 import { useToast } from '@/components/ui/use-toast';
 import { useRealtimePolls } from '@/lib/hooks/use-realtime-polls';
 import { useScheduledActivation } from '@/lib/hooks/use-scheduled-activation';
+import { useUserSubscription } from '@/lib/hooks/use-user-subscription';
 import { DashboardViewProps } from '@/lib/types';
 
 export function DashboardView({
@@ -39,6 +40,13 @@ export function DashboardView({
 	// Background activation of scheduled polls
 	useScheduledActivation();
 
+	// User subscription status
+	const { usage, canCreatePoll, isProUser, pollsRemaining } = useUserSubscription({
+		userId,
+		companyId,
+		experienceId: companyId // Using companyId as experienceId for dashboard
+	});
+
 	const handleCreatePoll = async (data: {
 		question: string;
 		options: { option_text: string }[];
@@ -46,6 +54,17 @@ export function DashboardView({
 		scheduled_at?: string;
 		send_notification: boolean;
 	}) => {
+		// Check if user can create more polls
+		if (!canCreatePoll) {
+			toast({
+				title: 'Poll Limit Reached',
+				description: 'You have reached the maximum number of polls for the free plan. Please upgrade to Pro to create unlimited polls.',
+				variant: 'destructive',
+			});
+			setIsUpgradeModalOpen(true);
+			return;
+		}
+
 		setIsSubmitting(true);
 		try {
 			// Use the first experience ID if available, otherwise fall back to companyId
@@ -67,6 +86,18 @@ export function DashboardView({
 
 			if (!response.ok) {
 				const error = await response.json();
+				
+				// Handle subscription limit error
+				if (error.requiresUpgrade) {
+					toast({
+						title: 'Poll Limit Reached',
+						description: error.message,
+						variant: 'destructive',
+					});
+					setIsUpgradeModalOpen(true);
+					return;
+				}
+				
 				if (error.details && Array.isArray(error.details)) {
 					// Show detailed validation errors
 					const errorMessages = error.details.map((detail: any) => `${detail.field}: ${detail.message}`).join(', ');
@@ -159,15 +190,28 @@ export function DashboardView({
 							<Badge variant="secondary" className="px-2 py-1 sm:px-3 text-xs sm:text-sm hidden sm:inline-flex">
 								{accessLevel}
 							</Badge>
+							{!isProUser && (
+								<Badge variant="outline" className="px-2 py-1 sm:px-3 text-xs sm:text-sm hidden sm:inline-flex">
+									{usage?.active_polls_count || 0}/3 polls
+								</Badge>
+							)}
 							<Button
 								onClick={() => setIsUpgradeModalOpen(true)}
 								variant="outline"
-								className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950 text-xs sm:text-sm px-2 sm:px-4"
+								className={`${
+									isProUser 
+										? 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950' 
+										: 'border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950'
+								} text-xs sm:text-sm px-2 sm:px-4`}
 								size="sm"
 							>
 								<Crown className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-								<span className="hidden sm:inline">Upgrade to Pro</span>
-								<span className="sm:hidden">Pro</span>
+								<span className="hidden sm:inline">
+									{isProUser ? 'Pro Active' : 'Upgrade to Pro'}
+								</span>
+								<span className="sm:hidden">
+									{isProUser ? 'Pro' : 'Pro'}
+								</span>
 							</Button>
 							<Button
 								onClick={() => setIsCreateDialogOpen(true)}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
+import { updateUserSubscription } from '@/lib/db/user-subscription-functions';
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,8 +70,21 @@ export async function POST(request: NextRequest) {
 
 async function handlePaymentCompleted(data: any) {
   console.log('Payment completed:', data);
-  // Update user's subscription status in your database
-  // Grant Pro access to the user
+  // Update user's subscription status to Pro
+  if (data.user_id && data.company_id && data.experience_id) {
+    await updateUserSubscription(
+      data.user_id,
+      data.company_id,
+      data.experience_id,
+      {
+        subscription_status: 'pro',
+        plan_id: data.plan_id,
+        access_pass_id: data.access_pass_id,
+        subscription_started_at: new Date().toISOString(),
+        subscription_ends_at: data.subscription_ends_at
+      }
+    );
+  }
 }
 
 async function handlePaymentFailed(data: any) {
@@ -82,7 +96,20 @@ async function handlePaymentFailed(data: any) {
 async function handleSubscriptionCreated(data: any) {
   console.log('Subscription created:', data);
   // Activate Pro features for the user
-  // Update user's subscription status
+  if (data.user_id && data.company_id && data.experience_id) {
+    await updateUserSubscription(
+      data.user_id,
+      data.company_id,
+      data.experience_id,
+      {
+        subscription_status: 'pro',
+        plan_id: data.plan_id,
+        access_pass_id: data.access_pass_id,
+        subscription_started_at: new Date().toISOString(),
+        subscription_ends_at: data.subscription_ends_at
+      }
+    );
+  }
 }
 
 async function handleSubscriptionUpdated(data: any) {
@@ -94,11 +121,29 @@ async function handleSubscriptionUpdated(data: any) {
 async function handleSubscriptionCancelled(data: any) {
   console.log('Subscription cancelled:', data);
   // Revoke Pro access
-  // Update user's subscription status
+  if (data.user_id && data.company_id && data.experience_id) {
+    await updateUserSubscription(
+      data.user_id,
+      data.company_id,
+      data.experience_id,
+      {
+        subscription_status: 'free'
+      }
+    );
+  }
 }
 
 async function handleSubscriptionExpired(data: any) {
   console.log('Subscription expired:', data);
   // Revoke Pro access
-  // Update user's subscription status
+  if (data.user_id && data.company_id && data.experience_id) {
+    await updateUserSubscription(
+      data.user_id,
+      data.company_id,
+      data.experience_id,
+      {
+        subscription_status: 'free'
+      }
+    );
+  }
 }

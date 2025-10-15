@@ -5,6 +5,7 @@ import { Crown, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { useIframeSdk } from '@whop/react';
 
 interface UpgradeToProModalProps {
   open: boolean;
@@ -21,29 +22,42 @@ const proFeatures = [
 
 export function UpgradeToProModal({ open, onOpenChange }: UpgradeToProModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const iframeSdk = useIframeSdk();
 
   const handleUpgrade = async () => {
     setIsLoading(true);
-    
+
     try {
       // Get the access pass ID and plan ID from environment variables
       const accessPassId = process.env.NEXT_PUBLIC_WHOP_ACCESS_PASS_ID;
       const planId = process.env.NEXT_PUBLIC_WHOP_PLAN_ID;
-      
+
       if (!accessPassId || !planId) {
         throw new Error('Whop configuration missing. Please check environment variables.');
       }
+
+      // Open Whop checkout modal using iframe SDK
+      const res = await iframeSdk.inAppPurchase({ 
+        planId: planId 
+      });
       
-      // Redirect to Whop checkout
-      const checkoutUrl = `https://whop.com/checkout/${accessPassId}?plan_id=${planId}`;
-      window.open(checkoutUrl, '_blank');
-      
-      setIsLoading(false);
-      onOpenChange(false);
+      if (res.status === "ok") {
+        console.log('Payment successful!', res.data.receipt_id);
+        setIsLoading(false);
+        onOpenChange(false);
+        // You can add success toast or redirect logic here
+      } else {
+        console.error('Payment failed:', res.error);
+        setIsLoading(false);
+        // You can add error toast here
+      }
+
     } catch (error) {
-      console.error('Error opening checkout:', error);
+      console.error('Error opening checkout modal:', error);
       setIsLoading(false);
-      // You might want to show an error toast here
+      // Fallback to opening in new window if iframe SDK fails
+      const checkoutUrl = `https://whop.com/checkout/${process.env.NEXT_PUBLIC_WHOP_ACCESS_PASS_ID}?plan_id=${process.env.NEXT_PUBLIC_WHOP_PLAN_ID}`;
+      window.open(checkoutUrl, '_blank');
     }
   };
 

@@ -32,7 +32,7 @@ export async function sendPollActiveNotification(
       return;
     }
 
-    // Prepare notification content
+    // Prepare notification content based on official Whop documentation
     const notificationInfo = {
       title: 'New Poll Available!',
       subtitle: company.name || 'Community Poll',
@@ -42,14 +42,15 @@ export async function sendPollActiveNotification(
     };
 
     // Send push notification to all users in the experience
-    // Using the correct Whop SDK method based on the documentation
+    // Using the exact structure from official Whop documentation
     const notificationPayload = {
-      title: notificationInfo.title,
-      content: notificationInfo.content,
-      experienceId: poll.experience_id,
+      title: notificationInfo.title, // Required
+      content: notificationInfo.content, // Required
+      subtitle: notificationInfo.subtitle, // Add subtitle as shown in docs
+      experienceId: poll.experience_id, // Send to all users in this experience
       externalId: poll.id,
-      isMention: true,
-      restPath: `/experiences/${poll.experience_id}`,
+      isMention: true, // Sends immediate mobile push
+      restPath: `polls/${poll.id}`, // Deep link to specific poll
       senderUserId: poll.creator_user_id,
     };
 
@@ -59,8 +60,23 @@ export async function sendPollActiveNotification(
     try {
       // Check if the method exists
       if (whopSdk.notifications && whopSdk.notifications.sendPushNotification) {
-        await whopSdk.notifications.sendPushNotification(notificationPayload);
+        console.log('📤 Calling Whop SDK sendPushNotification...');
+        const result = await whopSdk.notifications.sendPushNotification(notificationPayload);
         console.log(`✅ Poll notification sent for poll ${poll.id} to all users in experience ${poll.experience_id}`);
+        console.log('Notification result:', result);
+        
+        // Additional debugging
+        if (result === null) {
+          console.log('⚠️  Notification result is null - this might indicate:');
+          console.log('   1. Notification was sent but Whop returns null');
+          console.log('   2. No users in the experience to notify');
+          console.log('   3. User permissions issue');
+          console.log('   4. Whop app configuration issue');
+        } else if (result === true) {
+          console.log('✅ Notification sent successfully (result: true)');
+        } else {
+          console.log('📋 Notification result:', typeof result, result);
+        }
       } else {
         console.error('❌ sendPushNotification method not available in Whop SDK');
         console.log('Available notification methods:', whopSdk.notifications ? Object.keys(whopSdk.notifications) : 'notifications object not found');
@@ -72,6 +88,8 @@ export async function sendPollActiveNotification(
       console.log('1. Whop SDK not properly configured');
       console.log('2. Method name might be different');
       console.log('3. Missing required parameters');
+      console.log('4. Invalid experienceId or other parameters');
+      console.log('5. Authentication/authorization issue');
     }
   } catch (error) {
     console.error('Error sending poll notification:', error);

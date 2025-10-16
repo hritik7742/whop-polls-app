@@ -27,8 +27,13 @@ export function getWhopSdk() {
 				},
 				notifications: {
 					sendPushNotification: (payload: any) => {
-						console.log('Mock notification sent:', payload);
-						return Promise.resolve({ success: true });
+						console.log('Mock notification sent with official structure:', payload);
+						console.log('✅ Title:', payload.title);
+						console.log('✅ Content:', payload.content);
+						console.log('✅ Experience ID:', payload.experienceId);
+						console.log('✅ Is Mention:', payload.isMention);
+						console.log('✅ Rest Path:', payload.restPath);
+						return Promise.resolve(true); // Official docs return boolean
 					}
 				}
 			} as any;

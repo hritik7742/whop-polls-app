@@ -10,6 +10,10 @@ import { useIframeSdk } from '@whop/react';
 interface UpgradeToProModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUpgradeSuccess?: () => void;
+  userId?: string;
+  companyId?: string;
+  experienceId?: string;
 }
 
 const proFeatures = [
@@ -20,7 +24,14 @@ const proFeatures = [
   "Custom branding"
 ];
 
-export function UpgradeToProModal({ open, onOpenChange }: UpgradeToProModalProps) {
+export function UpgradeToProModal({ 
+  open, 
+  onOpenChange, 
+  onUpgradeSuccess,
+  userId,
+  companyId,
+  experienceId
+}: UpgradeToProModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const iframeSdk = useIframeSdk();
 
@@ -43,9 +54,40 @@ export function UpgradeToProModal({ open, onOpenChange }: UpgradeToProModalProps
       
       if (res.status === "ok") {
         console.log('Payment successful!', res.data.receiptId);
+        
+        // Process the upgrade in real-time
+        if (userId && companyId) {
+          try {
+            const upgradeResponse = await fetch('/api/payments/upgrade', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId,
+                companyId,
+                experienceId,
+                planId: planId,
+                accessPassId: accessPassId
+              })
+            });
+
+            if (upgradeResponse.ok) {
+              console.log('✅ Real-time upgrade processed successfully');
+              // Call the success callback to update UI optimistically
+              if (onUpgradeSuccess) {
+                onUpgradeSuccess();
+              }
+            } else {
+              console.error('Failed to process upgrade:', await upgradeResponse.text());
+            }
+          } catch (error) {
+            console.error('Error processing upgrade:', error);
+          }
+        }
+        
         setIsLoading(false);
         onOpenChange(false);
-        // You can add success toast or redirect logic here
       } else {
         console.error('Payment failed:', res.error);
         setIsLoading(false);

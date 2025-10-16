@@ -12,9 +12,10 @@ import { CreatePollDialog } from '@/components/create-poll-dialog';
 import { PollsPerformanceChart } from '@/components/polls-performance-chart';
 import { UpgradeToProModal } from '@/components/upgrade-to-pro-modal';
 import { useToast } from '@/components/ui/use-toast';
-import { useRealtimePolls } from '@/lib/hooks/use-realtime-polls';
+import { useRealtimeCrud } from '@/lib/hooks/use-realtime-crud';
 import { useScheduledActivation } from '@/lib/hooks/use-scheduled-activation';
-import { useUserSubscription } from '@/lib/hooks/use-user-subscription';
+import { useRealtimeUserSubscription } from '@/lib/hooks/use-realtime-user-subscription';
+import { useRealtimeExperiences } from '@/lib/hooks/use-realtime-experiences';
 import { DashboardViewProps } from '@/lib/types';
 import { whopSdk } from '@/lib/whop-sdk';
 
@@ -35,11 +36,29 @@ export function DashboardView({
 	const [isDeleting, setIsDeleting] = useState(false);
 	const { toast } = useToast();
 	
-	// Get the first experience ID for real-time updates and subscription tracking
-	const experienceId = experiences && experiences.length > 0 ? experiences[0].id : null;
+	// Real-time experiences data
+	const { experiences: realtimeExperiences } = useRealtimeExperiences({ 
+		companyId, 
+		initialExperiences: experiences as any
+	});
 	
-	// Use real-time polls hook for live updates (use company ID for company-wide polls)
-	const { polls, refetch } = useRealtimePolls(companyId, userId, initialPolls);
+	// Get the first experience ID for real-time updates and subscription tracking
+	const experienceId = realtimeExperiences && realtimeExperiences.length > 0 ? realtimeExperiences[0].id : null;
+	
+	// Use comprehensive real-time CRUD hook for live updates
+	const { 
+		polls, 
+		refetch, 
+		optimisticVote,
+		optimisticCreatePoll,
+		optimisticDeletePoll,
+		optimisticUpdatePoll
+	} = useRealtimeCrud({ 
+		companyId, 
+		experienceId: experienceId || undefined, 
+		userId, 
+		initialPolls 
+	});
 	
 	// Debug logging for dashboard polls
 	console.log('Dashboard View - Polls Debug:', {
@@ -52,8 +71,15 @@ export function DashboardView({
 	// Background activation of scheduled polls
 	useScheduledActivation();
 
-	// User subscription status (use experience ID if available)
-	const { usage, canCreatePoll, isProUser, pollsRemaining } = useUserSubscription({
+	// Real-time user subscription status (use experience ID if available)
+	const { 
+		usage, 
+		canCreatePoll, 
+		isProUser, 
+		pollsRemaining,
+		optimisticCreatePoll: optimisticCreatePollUsage,
+		optimisticUpgradeToPro
+	} = useRealtimeUserSubscription({
 		userId,
 		companyId,
 		experienceId: experienceId || companyId // Use real experience ID if available
@@ -102,20 +128,45 @@ export function DashboardView({
 		}
 		
 		console.log('Creating poll with experience ID:', experienceId);
+		
+		// Create optimistic poll for immediate UI update
+		const optimisticPoll = {
+			question: data.question,
+			options: data.options.map(opt => ({
+				...opt,
+				id: `temp-${Date.now()}-${Math.random()}`,
+				poll_id: `temp-poll-${Date.now()}`,
+				vote_count: 0,
+				percentage: 0,
+				created_at: new Date().toISOString()
+			})),
+			company_id: companyId,
+			experience_id: experienceId,
+			creator_user_id: userId,
+			expires_at: data.expires_at,
+			scheduled_at: data.scheduled_at,
+			send_notification: data.send_notification,
+			status: (data.scheduled_at ? 'scheduled' : 'active') as 'active' | 'expired' | 'scheduled'
+		};
+		
+		// Add optimistic poll to UI immediately
+		optimisticCreatePoll(optimisticPoll);
+		
+		// Update usage count optimistically
+		optimisticCreatePollUsage();
 			
-			
-			const response = await fetch('/api/polls', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					...headers,
-				},
-				body: JSON.stringify({
-					...data,
-					company_id: companyId,
-					experience_id: experienceId,
-				}),
-			});
+		const response = await fetch('/api/polls', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				...headers,
+			},
+			body: JSON.stringify({
+				...data,
+				company_id: companyId,
+				experience_id: experienceId,
+			}),
+		});
 
 			if (!response.ok) {
 				const error = await response.json();
@@ -168,6 +219,9 @@ export function DashboardView({
 	const handleDeletePoll = async (pollId: string) => {
 		setIsDeleting(true);
 		try {
+			// Remove poll from UI immediately (optimistic update)
+			optimisticDeletePoll(pollId);
+			
 			const response = await fetch(`/api/polls/${pollId}`, {
 				method: 'DELETE',
 				headers: {
@@ -177,6 +231,8 @@ export function DashboardView({
 
 			if (!response.ok) {
 				const error = await response.json();
+				// If deletion failed, refetch to restore the poll
+				refetch();
 				throw new Error(error.error || 'Failed to delete poll');
 			}
 
@@ -225,7 +281,7 @@ export function DashboardView({
 							</Badge>
 							{!isProUser && (
 								<Badge variant="outline" className="px-2 py-1 sm:px-3 text-xs sm:text-sm hidden sm:inline-flex">
-									{usage?.active_polls_count || 0}/3 polls
+									{usage?.total_polls_created || 0}/3 polls
 								</Badge>
 							)}
 							<Button
@@ -282,6 +338,46 @@ export function DashboardView({
 				</div>
 			</div>
 
+			{/* Real-time Usage Display */}
+			{!isProUser && (
+				<div className="border-b bg-amber-50 dark:bg-amber-950/20">
+					<div className="container mx-auto px-4 sm:px-6 py-3">
+						<div className="flex items-center justify-between">
+							<div className="flex items-center gap-3">
+								<div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+									<svg className="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+										Free Plan Usage
+									</p>
+									<p className="text-xs text-amber-600 dark:text-amber-400">
+										{usage?.total_polls_created || 0} of 3 polls created
+									</p>
+								</div>
+							</div>
+							<div className="flex items-center gap-2">
+								<div className="w-20 bg-amber-200 dark:bg-amber-800 rounded-full h-2">
+									<div 
+										className="bg-amber-500 h-2 rounded-full transition-all duration-300" 
+										style={{ width: `${Math.min(((usage?.total_polls_created || 0) / 3) * 100, 100)}%` }}
+									></div>
+								</div>
+								<Button
+									onClick={() => setIsUpgradeModalOpen(true)}
+									size="sm"
+									className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3"
+								>
+									Upgrade
+								</Button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Main Content */}
 			<div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
 				<Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -309,9 +405,13 @@ export function DashboardView({
 			/>
 
 			{/* Upgrade to Pro Modal */}
-			<UpgradeToProModal
-				open={isUpgradeModalOpen}
+			<UpgradeToProModal 
+				open={isUpgradeModalOpen} 
 				onOpenChange={setIsUpgradeModalOpen}
+				onUpgradeSuccess={optimisticUpgradeToPro}
+				userId={userId}
+				companyId={companyId}
+				experienceId={experienceId || undefined}
 			/>
 		</div>
 	);

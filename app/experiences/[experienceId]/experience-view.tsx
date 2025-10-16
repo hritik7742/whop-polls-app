@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Poll } from '@/lib/db/polls';
 import { PollsList } from '@/components/polls-list';
 import { useRealtimePolls } from '@/lib/hooks/use-realtime-polls';
@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { PollsListSkeleton } from '@/components/loading-skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ExperienceViewProps } from '@/lib/types';
+// Removed direct SDK import - will use API instead
 
 export function ExperienceView({
 	user,
@@ -16,17 +17,88 @@ export function ExperienceView({
 	accessLevel,
 	polls: initialPolls,
 	userId,
-	headers
+	headers,
+	highlightPollId
 }: ExperienceViewProps & { headers: Record<string, string> }) {
 	const [isVoting, setIsVoting] = useState(false);
 	const [activeTab, setActiveTab] = useState('active');
 	const { toast } = useToast();
 	
 	// Use real-time polls hook for live updates
-	const { polls: allPolls, loading, optimisticVote } = useRealtimePolls(experience.company?.id || experience.id, userId);
+	const { polls: allPolls, loading, optimisticVote } = useRealtimePolls(experience.company?.id || experience.id, userId, initialPolls);
 	
 	// Background activation of scheduled polls
 	useScheduledActivation();
+	
+	// Track previous polls to detect new ones
+	const previousPollsRef = useRef<Poll[]>([]);
+	const notifiedPollsRef = useRef<Set<string>>(new Set());
+	
+	// Monitor for new polls and send notifications
+	useEffect(() => {
+		if (loading || !allPolls.length) return;
+		
+		const currentPolls = allPolls;
+		const previousPolls = previousPollsRef.current;
+		
+		// Find new polls that haven't been notified yet
+		const newPolls = currentPolls.filter(poll => {
+			const isNew = !previousPolls.some(prevPoll => prevPoll.id === poll.id);
+			const notNotified = !notifiedPollsRef.current.has(poll.id);
+			const isActive = poll.status === 'active';
+			const hasNotificationEnabled = poll.send_notification;
+			
+			return isNew && notNotified && isActive && hasNotificationEnabled;
+		});
+		
+		// Send notifications for new polls via API
+		newPolls.forEach(async (poll) => {
+			try {
+				console.log('🔔 New poll detected in experience view:', {
+					pollId: poll.id,
+					question: poll.question.substring(0, 50) + '...',
+					experienceId: experience.id,
+					notificationEnabled: poll.send_notification
+				});
+				
+				console.log('📋 Sending notification to all members of experience:', experience.id);
+				console.log('💡 To see who receives notifications, check your Whop dashboard or mobile app');
+				
+				// Send notification via server API
+				console.log('📤 Calling server API to send notification...');
+				const response = await fetch('/api/polls/notify', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						pollId: poll.id,
+						question: poll.question,
+						experienceId: experience.id,
+						creatorUserId: poll.creator_user_id
+					})
+				});
+
+				if (response.ok) {
+					const result = await response.json();
+					console.log(`✅ Server notification sent for poll ${poll.id}:`, result.message);
+				} else {
+					const error = await response.json();
+					console.error('❌ Server notification failed:', error);
+				}
+				
+				// Mark as notified
+				notifiedPollsRef.current.add(poll.id);
+				
+			} catch (error) {
+				console.error('❌ Error calling notification API:', error);
+			}
+		});
+		
+		// Update previous polls reference
+		previousPollsRef.current = currentPolls;
+		
+	}, [allPolls, loading, experience.id]);
 	
 	// Filter polls based on active tab
 	const getFilteredPolls = () => {
@@ -146,6 +218,7 @@ export function ExperienceView({
 									polls={polls}
 									onVote={handleVote}
 									isVoting={isVoting}
+									highlightPollId={highlightPollId}
 								/>
 							)}
 						</TabsContent>
@@ -158,6 +231,7 @@ export function ExperienceView({
 									polls={polls}
 									onVote={handleVote}
 									isVoting={isVoting}
+									highlightPollId={highlightPollId}
 								/>
 							)}
 						</TabsContent>

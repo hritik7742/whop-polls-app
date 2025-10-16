@@ -1,6 +1,6 @@
 import { whopSdk } from "@/lib/whop-sdk";
 import { headers } from "next/headers";
-import { getPollsByCompany } from "@/lib/db/polls";
+import { getPollsByCompany, getPollsByExperience } from "@/lib/db/polls";
 import { DashboardView } from "./dashboard-view";
 
 export default async function DashboardPage({
@@ -25,9 +25,24 @@ export default async function DashboardPage({
 	const user = await whopSdk.users.getUser({ userId });
 	const company = await whopSdk.companies.getCompany({ companyId });
 
-	// For now, we'll use the company ID as the experience ID
-	// This ensures polls created from dashboard will be visible in experience view
-	const experiences = [{ id: companyId }];
+	// Get the actual experiences for this company from Whop SDK
+	let experiences: any[] = [];
+	try {
+	  const experiencesResult = await whopSdk.experiences.listExperiences({
+		 companyId: companyId,
+	  });
+	  
+	  // FIX: Use experiencesV2.nodes instead of experiences
+	  experiences = experiencesResult?.experiencesV2?.nodes || [];
+	  
+	  console.log('Dashboard - Found experiences:', experiences.map(exp => ({ 
+		 id: exp?.id, 
+		 name: exp?.name 
+	  })));
+	} catch (error) {
+	  console.error('Error fetching experiences:', error);
+	  experiences = [];
+	}
 
 	// Either: 'admin' | 'no_access';
 	// 'admin' means the user is an admin of the company, such as an owner or moderator
@@ -47,9 +62,10 @@ export default async function DashboardPage({
 		);
 	}
 
-	// Fetch polls for this company
-	
-	const polls = await getPollsByCompany(companyId, userId);
+	// Fetch polls for the entire company (all experiences)
+	let polls = [];
+	polls = await getPollsByCompany(companyId, userId);
+	console.log('Dashboard - Fetched polls for company:', companyId, 'Count:', polls.length);
 
 	// Pass headers to the client component
 	const headersObject = Object.fromEntries(headersList.entries());

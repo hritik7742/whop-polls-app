@@ -16,6 +16,7 @@ import { useRealtimePolls } from '@/lib/hooks/use-realtime-polls';
 import { useScheduledActivation } from '@/lib/hooks/use-scheduled-activation';
 import { useUserSubscription } from '@/lib/hooks/use-user-subscription';
 import { DashboardViewProps } from '@/lib/types';
+import { whopSdk } from '@/lib/whop-sdk';
 
 export function DashboardView({
 	user,
@@ -34,17 +35,28 @@ export function DashboardView({
 	const [isDeleting, setIsDeleting] = useState(false);
 	const { toast } = useToast();
 	
-	// Use real-time polls hook for live updates
-	const { polls, refetch } = useRealtimePolls(companyId, userId);
+	// Get the first experience ID for real-time updates and subscription tracking
+	const experienceId = experiences && experiences.length > 0 ? experiences[0].id : null;
+	
+	// Use real-time polls hook for live updates (use company ID for company-wide polls)
+	const { polls, refetch } = useRealtimePolls(companyId, userId, initialPolls);
+	
+	// Debug logging for dashboard polls
+	console.log('Dashboard View - Polls Debug:', {
+		companyId,
+		experienceId,
+		pollsCount: polls?.length || 0,
+		polls: polls?.map(p => ({ id: p.id, question: p.question.substring(0, 50) + '...', status: p.status }))
+	});
 	
 	// Background activation of scheduled polls
 	useScheduledActivation();
 
-	// User subscription status
+	// User subscription status (use experience ID if available)
 	const { usage, canCreatePoll, isProUser, pollsRemaining } = useUserSubscription({
 		userId,
 		companyId,
-		experienceId: companyId // Using companyId as experienceId for dashboard
+		experienceId: experienceId || companyId // Use real experience ID if available
 	});
 
 	// Debug logging
@@ -77,8 +89,19 @@ export function DashboardView({
 
 		setIsSubmitting(true);
 		try {
-			// Use the first experience ID if available, otherwise fall back to companyId
-			const experienceId = experiences && experiences.length > 0 ? experiences[0].id : companyId;
+		// Use the experience ID we already determined
+		
+		// If no experience ID, we can't create polls
+		if (!experienceId) {
+			toast({
+				variant: "destructive",
+				title: "No Experience Found",
+				description: "Please create an experience in your Whop dashboard before creating polls.",
+			});
+			return;
+		}
+		
+		console.log('Creating poll with experience ID:', experienceId);
 			
 			
 			const response = await fetch('/api/polls', {

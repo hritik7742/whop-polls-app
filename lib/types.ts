@@ -83,6 +83,7 @@ export interface ExperienceViewProps {
   accessLevel: string;
   polls: Poll[];
   userId: string;
+  highlightPollId?: string; // Optional poll ID to highlight when coming from deep link
 }
 
 export interface DashboardViewProps {
@@ -101,6 +102,7 @@ export interface PollCardProps {
   isVoting?: boolean;
   pollNumber?: number;
   showNumber?: boolean;
+  isHighlighted?: boolean; // Whether this poll should be highlighted
 }
 
 export interface VoteOptionProps {
@@ -116,6 +118,7 @@ export interface PollsListProps {
   polls: Poll[];
   onVote: (pollId: string, optionId: string) => Promise<void>;
   isVoting: boolean;
+  highlightPollId?: string; // Optional poll ID to highlight
 }
 
 // Hook types

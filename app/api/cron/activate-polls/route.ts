@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { sendBatchPollNotifications, getCompanyInfo } from '@/lib/notifications/poll-notifications';
+// Notifications will be sent from experience view instead
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,28 +48,8 @@ export async function GET(request: NextRequest) {
     if (activatedCount > 0) {
       console.log('Activated polls:', activatedPolls?.map(p => ({ id: p.id, question: p.question.substring(0, 50) + '...' })));
       
-      try {
-        // Group polls by company to send notifications efficiently
-        const pollsByCompany = new Map<string, any[]>();
-        
-        for (const poll of activatedPolls || []) {
-          if (!pollsByCompany.has(poll.company_id)) {
-            pollsByCompany.set(poll.company_id, []);
-          }
-          pollsByCompany.get(poll.company_id)!.push(poll);
-        }
-
-        // Send notifications for each company
-        for (const [companyId, polls] of pollsByCompany) {
-          const company = await getCompanyInfo(companyId);
-          if (company) {
-            await sendBatchPollNotifications(polls, company);
-          }
-        }
-      } catch (notificationError) {
-        console.error('Error sending notifications for activated polls:', notificationError);
-        // Don't fail the activation if notifications fail
-      }
+      // Notifications will be sent from experience view when polls are detected
+      console.log(`Activated ${activatedPolls?.length || 0} polls - notifications will be sent from experience view`);
     }
 
     return NextResponse.json({

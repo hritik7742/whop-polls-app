@@ -5,7 +5,7 @@ import { PollCard } from './poll-card';
 import { Card, CardContent } from '@/components/ui/card';
 import { PollsListProps } from '@/lib/types';
 
-export function PollsList({ polls, onVote, isVoting = false }: PollsListProps) {
+export function PollsList({ polls, onVote, isVoting = false, highlightPollId }: PollsListProps) {
   const handleVote = async (pollId: string, optionId: string) => {
     await onVote(pollId, optionId);
   };
@@ -42,6 +42,7 @@ export function PollsList({ polls, onVote, isVoting = false }: PollsListProps) {
           isVoting={isVoting}
           pollNumber={index + 1}
           showNumber={polls.length > 1}
+          isHighlighted={highlightPollId === poll.id}
         />
       ))}
     </div>

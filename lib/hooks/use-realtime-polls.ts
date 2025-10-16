@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Poll } from '@/lib/db/polls';
 
-export function useRealtimePolls(companyId: string, userId: string) {
-  const [polls, setPolls] = useState<Poll[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useRealtimePolls(companyId: string, userId: string, initialPolls: Poll[] = []) {
+  const [polls, setPolls] = useState<Poll[]>(initialPolls);
+  const [loading, setLoading] = useState(initialPolls.length === 0);
   const [error, setError] = useState<string | null>(null);
   const subscriptionsRef = useRef<any[]>([]);
 

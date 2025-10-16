@@ -6,7 +6,7 @@ console.log('🔍 Debugging Whop SDK...\n');
 
 // Try to import and check the SDK
 try {
-  const { whopSdk } = await import('../lib/whop-sdk.js');
+  const { whopSdk } = await import('../lib/whop-sdk.ts');
   
   console.log('✅ Whop SDK imported successfully');
   console.log('📋 Available methods:');

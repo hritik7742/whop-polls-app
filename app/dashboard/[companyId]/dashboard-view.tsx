@@ -47,6 +47,16 @@ export function DashboardView({
 		experienceId: companyId // Using companyId as experienceId for dashboard
 	});
 
+	// Debug logging
+	console.log('Dashboard subscription status:', {
+		usage,
+		canCreatePoll,
+		isProUser,
+		pollsRemaining,
+		userId,
+		companyId
+	});
+
 	const handleCreatePoll = async (data: {
 		question: string;
 		options: { option_text: string }[];

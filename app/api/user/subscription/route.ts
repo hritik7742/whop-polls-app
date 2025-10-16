@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { whopSdk } from '@/lib/whop-sdk';
 import { getUserPollUsage, initializeUserSubscription } from '@/lib/db/user-subscription-functions';
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, companyId, experienceId } = body;
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const companyId = searchParams.get('companyId');
+    const experienceId = searchParams.get('experienceId');
 
     if (!userId || !companyId || !experienceId) {
       return NextResponse.json(

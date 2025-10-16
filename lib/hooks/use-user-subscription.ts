@@ -22,16 +22,11 @@ export function useUserSubscription({ userId, companyId, experienceId }: UseUser
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/user/subscription', {
-        method: 'POST',
+      const response = await fetch(`/api/user/subscription?userId=${userId}&companyId=${companyId}&experienceId=${experienceId}`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId,
-          companyId,
-          experienceId,
-        }),
       });
 
       if (!response.ok) {
@@ -56,8 +51,6 @@ export function useUserSubscription({ userId, companyId, experienceId }: UseUser
   useEffect(() => {
     if (!userId || !companyId || !experienceId || !supabase) return;
 
-    // supabase is already imported
-    
     // Subscribe to user_subscriptions table changes
     const subscription = supabase
       .channel(`user_subscription_${userId}_${companyId}_${experienceId}`)
@@ -67,9 +60,10 @@ export function useUserSubscription({ userId, companyId, experienceId }: UseUser
           event: '*',
           schema: 'public',
           table: 'user_subscriptions',
-          filter: `user_id=eq.${userId}`,
+          filter: `user_id=eq.${userId},company_id=eq.${companyId},experience_id=eq.${experienceId}`,
         },
-        () => {
+        (payload) => {
+          console.log('User subscription changed:', payload);
           // Refetch usage when subscription changes
           fetchUsage();
         }
@@ -80,10 +74,25 @@ export function useUserSubscription({ userId, companyId, experienceId }: UseUser
           event: '*',
           schema: 'public',
           table: 'user_poll_usage',
-          filter: `user_id=eq.${userId}`,
+          filter: `user_id=eq.${userId},company_id=eq.${companyId},experience_id=eq.${experienceId}`,
         },
-        () => {
+        (payload) => {
+          console.log('User poll usage changed:', payload);
           // Refetch usage when poll usage changes
+          fetchUsage();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'polls',
+          filter: `creator_user_id=eq.${userId},company_id=eq.${companyId},experience_id=eq.${experienceId}`,
+        },
+        (payload) => {
+          console.log('Poll created/deleted, refetching usage:', payload);
+          // Refetch usage when polls are created or deleted
           fetchUsage();
         }
       )

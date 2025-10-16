@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { sendBatchPollNotifications, getCompanyInfo } from '@/lib/notifications/poll-notifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,10 +28,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the count of activated polls
+    // Get the count of activated polls with full details for notifications
     const { data: activatedPolls, error: countError } = await supabaseServer
       .from('polls')
-      .select('id, question, scheduled_at')
+      .select('id, question, scheduled_at, creator_user_id, company_id, experience_id, send_notification')
       .eq('status', 'active')
       .gte('scheduled_at', new Date(Date.now() - 60000).toISOString()) // Polls activated in the last minute
       .not('scheduled_at', 'is', null);
@@ -42,8 +43,33 @@ export async function GET(request: NextRequest) {
     const activatedCount = activatedPolls?.length || 0;
     
     console.log(`✅ Activated ${activatedCount} scheduled polls`);
+    
+    // Send notifications for activated polls
     if (activatedCount > 0) {
       console.log('Activated polls:', activatedPolls?.map(p => ({ id: p.id, question: p.question.substring(0, 50) + '...' })));
+      
+      try {
+        // Group polls by company to send notifications efficiently
+        const pollsByCompany = new Map<string, any[]>();
+        
+        for (const poll of activatedPolls || []) {
+          if (!pollsByCompany.has(poll.company_id)) {
+            pollsByCompany.set(poll.company_id, []);
+          }
+          pollsByCompany.get(poll.company_id)!.push(poll);
+        }
+
+        // Send notifications for each company
+        for (const [companyId, polls] of pollsByCompany) {
+          const company = await getCompanyInfo(companyId);
+          if (company) {
+            await sendBatchPollNotifications(polls, company);
+          }
+        }
+      } catch (notificationError) {
+        console.error('Error sending notifications for activated polls:', notificationError);
+        // Don't fail the activation if notifications fail
+      }
     }
 
     return NextResponse.json({

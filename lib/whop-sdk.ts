@@ -24,6 +24,12 @@ export function getWhopSdk() {
 				},
 				experiences: {
 					getExperience: () => Promise.resolve({ id: 'mock-experience', name: 'Mock Experience' })
+				},
+				notifications: {
+					sendPushNotification: (payload: any) => {
+						console.log('Mock notification sent:', payload);
+						return Promise.resolve({ success: true });
+					}
 				}
 			} as any;
 		}

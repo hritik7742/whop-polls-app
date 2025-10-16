@@ -32,24 +32,48 @@ export async function getUserPollUsage(
 ): Promise<UserPollUsage | null> {
   const supabase = createServerClient();
   
-  const { data, error } = await supabase.rpc('get_user_poll_usage', {
-    p_user_id: userId,
-    p_company_id: companyId,
-    p_experience_id: experienceId
-  });
+  try {
+    // Get subscription status
+    const { data: subscriptionData, error: subError } = await supabase
+      .from('user_subscriptions')
+      .select('subscription_status')
+      .eq('user_id', userId)
+      .eq('company_id', companyId)
+      .eq('experience_id', experienceId)
+      .single();
 
-  if (error) {
+    // Get poll usage data from user_poll_usage table
+    const { data: usageData, error: usageError } = await supabase
+      .from('user_poll_usage')
+      .select('total_polls_created, active_polls_count')
+      .eq('user_id', userId)
+      .eq('company_id', companyId)
+      .eq('experience_id', experienceId)
+      .single();
+
+    const subscriptionStatus = subscriptionData?.subscription_status || 'free';
+    const totalPolls = usageData?.total_polls_created || 0;
+    const activePolls = usageData?.active_polls_count || 0;
+    const maxFreePolls = 3;
+    const canCreateMore = subscriptionStatus === 'pro' || activePolls < maxFreePolls;
+
+    return {
+      subscription_status: subscriptionStatus,
+      total_polls_created: totalPolls,
+      active_polls_count: activePolls,
+      can_create_more: canCreateMore,
+      max_free_polls: maxFreePolls
+    };
+  } catch (error) {
     console.error('Error getting user poll usage:', error);
-    return null;
+    return {
+      subscription_status: 'free',
+      total_polls_created: 0,
+      active_polls_count: 0,
+      can_create_more: true,
+      max_free_polls: 3
+    };
   }
-
-  return data?.[0] || {
-    subscription_status: 'free',
-    total_polls_created: 0,
-    active_polls_count: 0,
-    can_create_more: true,
-    max_free_polls: 3
-  };
 }
 
 /**
@@ -62,18 +86,42 @@ export async function canUserCreatePoll(
 ): Promise<boolean> {
   const supabase = createServerClient();
   
-  const { data, error } = await supabase.rpc('can_user_create_poll', {
-    p_user_id: userId,
-    p_company_id: companyId,
-    p_experience_id: experienceId
-  });
+  try {
+    // Check subscription status
+    const { data: subscriptionData, error: subError } = await supabase
+      .from('user_subscriptions')
+      .select('subscription_status')
+      .eq('user_id', userId)
+      .eq('company_id', companyId)
+      .eq('experience_id', experienceId)
+      .single();
 
-  if (error) {
+    // If user has pro subscription, they can create unlimited polls
+    const subscriptionStatus = subscriptionData?.subscription_status || 'free';
+    if (subscriptionStatus === 'pro') {
+      return true;
+    }
+
+    // For free users, check active poll count from user_poll_usage table
+    const { data: usageData, error: usageError } = await supabase
+      .from('user_poll_usage')
+      .select('active_polls_count')
+      .eq('user_id', userId)
+      .eq('company_id', companyId)
+      .eq('experience_id', experienceId)
+      .single();
+
+    if (usageError && usageError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('Error checking poll creation permission:', usageError);
+      return false;
+    }
+
+    const activePollsCount = usageData?.active_polls_count || 0;
+    return activePollsCount < 3; // Free users can create up to 3 active polls
+  } catch (error) {
     console.error('Error checking poll creation permission:', error);
     return false;
   }
-
-  return data || false;
 }
 
 /**
@@ -151,14 +199,40 @@ export async function initializeUserSubscription(
 ): Promise<UserSubscription | null> {
   const supabase = createServerClient();
   
-  // Check if subscription already exists
-  const existing = await getUserSubscription(userId, companyId, experienceId);
-  if (existing) {
-    return existing;
-  }
+  try {
+    // Check if subscription already exists
+    const { data: existing, error: checkError } = await supabase
+      .from('user_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('company_id', companyId)
+      .eq('experience_id', experienceId)
+      .single();
 
-  // Create new free subscription
-  return await updateUserSubscription(userId, companyId, experienceId, {
-    subscription_status: 'free'
-  });
+    if (existing) {
+      return existing;
+    }
+
+    // Create new free subscription
+    const { data: newSubscription, error: createError } = await supabase
+      .from('user_subscriptions')
+      .insert({
+        user_id: userId,
+        company_id: companyId,
+        experience_id: experienceId,
+        subscription_status: 'free'
+      })
+      .select()
+      .single();
+
+    if (createError) {
+      console.error('Error creating user subscription:', createError);
+      return null;
+    }
+
+    return newSubscription;
+  } catch (error) {
+    console.error('Error initializing user subscription:', error);
+    return null;
+  }
 }

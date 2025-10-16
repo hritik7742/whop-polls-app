@@ -3,6 +3,7 @@ import { whopSdk } from '@/lib/whop-sdk';
 import { createPoll, CreatePollData } from '@/lib/db/polls';
 import { createPollSchema } from '@/lib/validation';
 import { canUserCreatePoll, initializeUserSubscription } from '@/lib/db/user-subscription-functions';
+import { sendPollActiveNotification, getCompanyInfo } from '@/lib/notifications/poll-notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,6 +68,26 @@ export async function POST(request: NextRequest) {
     };
 
     const poll = await createPoll(pollData);
+
+    // Send notification if poll is active and notifications are enabled
+    if (poll.status === 'active' && send_notification) {
+      try {
+        const company = await getCompanyInfo(company_id);
+        if (company) {
+          await sendPollActiveNotification({
+            id: poll.id,
+            question: poll.question,
+            creator_user_id: userId,
+            company_id: company_id,
+            experience_id: experience_id,
+            send_notification: send_notification
+          }, company);
+        }
+      } catch (notificationError) {
+        console.error('Error sending poll notification:', notificationError);
+        // Don't fail the poll creation if notification fails
+      }
+    }
 
     return NextResponse.json(poll, { status: 201 });
   } catch (error) {

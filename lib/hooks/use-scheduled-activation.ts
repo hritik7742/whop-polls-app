@@ -20,7 +20,40 @@ export function useScheduledActivation() {
         if (activationResponse.ok) {
           const result = await activationResponse.json();
           if (result.success && result.activatedCount > 0) {
-            console.log(`✅ Activated ${result.activatedCount} scheduled polls`);
+            console.log(`✅ Activated ${result.activatedCount} scheduled polls:`, result.activatedPolls);
+            console.log('🔔 Notifications will be sent for newly activated polls');
+            
+            // Send notifications directly for newly activated polls
+            for (const poll of result.activatedPolls || []) {
+              if (poll.send_notification) {
+                try {
+                  console.log(`📤 Sending direct notification for activated poll: ${poll.id}`);
+                  const notificationResponse = await fetch('/api/polls/notify', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      pollId: poll.id,
+                      question: poll.question,
+                      experienceId: poll.experience_id,
+                      creatorUserId: poll.creator_user_id,
+                      send_notification: poll.send_notification,
+                      created_at: poll.created_at
+                    })
+                  });
+                  
+                  if (notificationResponse.ok) {
+                    const notificationResult = await notificationResponse.json();
+                    console.log(`✅ Direct notification sent for activated poll ${poll.id}:`, notificationResult.message);
+                  } else {
+                    console.error(`❌ Failed to send direct notification for poll ${poll.id}`);
+                  }
+                } catch (error) {
+                  console.error(`❌ Error sending direct notification for poll ${poll.id}:`, error);
+                }
+              }
+            }
           }
         }
 

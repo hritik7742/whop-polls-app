@@ -1,6 +1,42 @@
 import { whopSdk } from '@/lib/whop-sdk';
 import { createServerClient } from '@/lib/supabase';
 
+// Track which polls have already sent notifications to prevent duplicates
+const sentNotifications = new Set<string>();
+
+// Database-based notification tracking
+async function hasNotificationBeenSent(pollId: string): Promise<boolean> {
+  try {
+    const supabase = createServerClient();
+    const { data, error } = await supabase
+      .from('poll_notifications_sent')
+      .select('id')
+      .eq('poll_id', pollId)
+      .single();
+    
+    return !error && !!data;
+  } catch (error) {
+    console.error('Error checking notification status:', error);
+    return false;
+  }
+}
+
+async function markNotificationAsSent(pollId: string, experienceId: string, creatorUserId: string): Promise<void> {
+  try {
+    const supabase = createServerClient();
+    await supabase
+      .from('poll_notifications_sent')
+      .insert({
+        poll_id: pollId,
+        experience_id: experienceId,
+        creator_user_id: creatorUserId,
+        sent_at: new Date().toISOString()
+      });
+  } catch (error) {
+    console.error('Error marking notification as sent:', error);
+  }
+}
+
 export interface PollInfo {
   id: string;
   question: string;
@@ -33,6 +69,19 @@ export async function sendPollActiveNotification(
       return;
     }
 
+    // Check if we've already sent notification for this poll (database check)
+    const alreadySent = await hasNotificationBeenSent(poll.id);
+    if (alreadySent) {
+      console.log(`Notification already sent for poll ${poll.id}, skipping duplicate`);
+      return;
+    }
+
+    // Also check in-memory cache
+    if (sentNotifications.has(poll.id)) {
+      console.log(`Notification already sent for poll ${poll.id} (cached), skipping duplicate`);
+      return;
+    }
+
     // Validate experience ID - it should start with 'exp_', not 'biz_'
     if (!poll.experience_id.startsWith('exp_')) {
       console.error(`❌ Invalid experience ID: ${poll.experience_id}. Experience IDs should start with 'exp_', not 'biz_'`);
@@ -45,8 +94,8 @@ export async function sendPollActiveNotification(
     console.log('📋 Sending notification to all members of experience:', poll.experience_id);
 
     // Send a push notification to everyone in the experience
-    // Following official Whop documentation structure
-    console.log('📤 Sending push notification...');
+    // Note: We cannot exclude the poll creator with current SDK, but we'll track this in our system
+    console.log('📤 Sending push notification to all experience members...');
     await whopSdk.notifications.sendPushNotification({
       title: "New poll launched!", // Required!
       content: poll.question.length > 100 
@@ -58,6 +107,10 @@ export async function sendPollActiveNotification(
       restPath: `/polls/${poll.id}`, // Deep link to specific poll (fixed: added leading slash)
     });
 
+    // Mark this poll as having sent notification in both database and memory
+    await markNotificationAsSent(poll.id, poll.experience_id, poll.creator_user_id);
+    sentNotifications.add(poll.id);
+    
     console.log(`✅ Poll notification sent for poll ${poll.id} to all users in experience ${poll.experience_id}`);
     console.log('🔍 Experience ID validation:', {
       experienceId: poll.experience_id,
@@ -150,6 +203,57 @@ export async function getPollInfo(pollId: string): Promise<PollInfo | null> {
     console.error('Error getting poll info:', error);
     return null;
   }
+}
+
+/**
+ * Check if a poll should send notification (new poll with notifications enabled)
+ */
+export async function shouldSendNotification(poll: {
+  id: string;
+  send_notification: boolean;
+  created_at?: string;
+}): Promise<boolean> {
+  // Check if notifications are enabled
+  if (!poll.send_notification) {
+    return false;
+  }
+
+  // Check if we've already sent notification (database check)
+  const alreadySent = await hasNotificationBeenSent(poll.id);
+  if (alreadySent) {
+    return false;
+  }
+
+  // Check if we've already sent notification (memory check)
+  if (sentNotifications.has(poll.id)) {
+    return false;
+  }
+
+  // Send notification for any poll that hasn't been notified yet
+  // No time limit - if it's new and not notified, send it
+  return true;
+}
+
+/**
+ * Mark a poll as having sent notification
+ */
+export async function markNotificationSent(pollId: string, experienceId?: string, creatorUserId?: string) {
+  sentNotifications.add(pollId);
+  
+  // Also mark in database if we have the required info
+  if (experienceId && creatorUserId) {
+    await markNotificationAsSent(pollId, experienceId, creatorUserId);
+  }
+}
+
+/**
+ * Clear old notification tracking (cleanup)
+ */
+export function clearOldNotificationTracking() {
+  // For now, we'll keep all entries since we don't have timestamps
+  // In production, you might want to implement a more sophisticated cleanup
+  // that removes entries older than 24 hours
+  console.log(`📊 Notification tracking: ${sentNotifications.size} polls have sent notifications`);
 }
 
 /**

@@ -46,11 +46,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the count of activated polls with full details for notifications
+    // Look for polls that were activated in the last 5 minutes to catch any missed activations
     const { data: activatedPolls, error: countError } = await supabaseServer
       .from('polls')
-      .select('id, question, scheduled_at, status, creator_user_id, company_id, experience_id, send_notification')
+      .select('id, question, scheduled_at, status, creator_user_id, company_id, experience_id, send_notification, created_at')
       .eq('status', 'active')
-      .gte('scheduled_at', new Date(Date.now() - 60000).toISOString()) // Polls activated in the last minute
+      .gte('scheduled_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()) // Polls activated in the last 5 minutes
       .not('scheduled_at', 'is', null);
 
     if (countError) {
@@ -61,6 +62,13 @@ export async function POST(request: NextRequest) {
     
     console.log('RPC activation result:', rpcResult);
     console.log(`✅ Activated ${activatedCount} scheduled polls`);
+    console.log('📊 Activated polls details:', activatedPolls?.map(p => ({
+      id: p.id,
+      question: p.question.substring(0, 50) + '...',
+      send_notification: p.send_notification,
+      scheduled_at: p.scheduled_at,
+      experience_id: p.experience_id
+    })));
     
     // Send notifications for activated polls
     if (activatedCount > 0) {

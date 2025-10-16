@@ -41,20 +41,69 @@ export function ExperienceView({
 		const currentPolls = allPolls;
 		const previousPolls = previousPollsRef.current;
 		
-		// Find new polls that haven't been notified yet
+		console.log('🔍 Notification check:', {
+			currentPollsCount: currentPolls.length,
+			previousPollsCount: previousPolls.length,
+			notifiedPollsCount: notifiedPollsRef.current.size,
+			notifiedPolls: Array.from(notifiedPollsRef.current)
+		});
+		
+		// Debug: Show current and previous poll statuses
+		console.log('📊 Current polls statuses:', currentPolls.map(p => ({ id: p.id, status: p.status, send_notification: p.send_notification })));
+		console.log('📊 Previous polls statuses:', previousPolls.map(p => ({ id: p.id, status: p.status, send_notification: p.send_notification })));
+		
+		// Find new polls and newly activated scheduled polls that haven't been notified yet
 		const newPolls = currentPolls.filter(poll => {
 			const isNew = !previousPolls.some(prevPoll => prevPoll.id === poll.id);
 			const notNotified = !notifiedPollsRef.current.has(poll.id);
 			const isActive = poll.status === 'active';
 			const hasNotificationEnabled = poll.send_notification;
 			
-			return isNew && notNotified && isActive && hasNotificationEnabled;
+			// Check if this poll was previously scheduled and is now active (newly activated)
+			const wasScheduled = previousPolls.some(prevPoll => 
+				prevPoll.id === poll.id && prevPoll.status === 'scheduled'
+			);
+			const isNewlyActivated = wasScheduled && isActive;
+			
+			// Debug: Show which polls are being checked for activation
+			if (wasScheduled) {
+				console.log(`🔄 Poll ${poll.id} was scheduled, now checking if activated:`, {
+					wasScheduled,
+					isActive,
+					isNewlyActivated,
+					previousStatus: previousPolls.find(p => p.id === poll.id)?.status,
+					currentStatus: poll.status
+				});
+			}
+			
+			// Send notification for:
+			// 1. New polls that haven't been notified yet
+			// 2. Scheduled polls that just became active
+			const shouldNotify = (isNew || isNewlyActivated) && notNotified && isActive && hasNotificationEnabled;
+			
+			console.log(`🔍 Checking poll ${poll.id}:`, {
+				isNew,
+				wasScheduled,
+				isNewlyActivated,
+				notNotified,
+				isActive,
+				hasNotificationEnabled,
+				shouldNotify,
+				createdAt: poll.created_at
+			});
+			
+			return shouldNotify;
 		});
 		
-		// Send notifications for new polls via API
+		console.log(`📊 Found ${newPolls.length} new/newly activated polls to notify:`, newPolls.map(p => p.id));
+		
+		// Send notifications for new polls and newly activated scheduled polls via API
 		newPolls.forEach(async (poll) => {
+			// Mark as notified IMMEDIATELY to prevent duplicate calls
+			notifiedPollsRef.current.add(poll.id);
+			
 			try {
-				console.log('🔔 New poll detected in experience view:', {
+				console.log('🔔 New/Newly activated poll detected in experience view:', {
 					pollId: poll.id,
 					question: poll.question.substring(0, 50) + '...',
 					experienceId: experience.id,
@@ -75,7 +124,9 @@ export function ExperienceView({
 						pollId: poll.id,
 						question: poll.question,
 						experienceId: experience.id,
-						creatorUserId: poll.creator_user_id
+						creatorUserId: poll.creator_user_id,
+						send_notification: poll.send_notification,
+						created_at: poll.created_at
 					})
 				});
 
@@ -85,13 +136,14 @@ export function ExperienceView({
 				} else {
 					const error = await response.json();
 					console.error('❌ Server notification failed:', error);
+					// If API call failed, remove from notified set so it can be retried
+					notifiedPollsRef.current.delete(poll.id);
 				}
-				
-				// Mark as notified
-				notifiedPollsRef.current.add(poll.id);
 				
 			} catch (error) {
 				console.error('❌ Error calling notification API:', error);
+				// If API call failed, remove from notified set so it can be retried
+				notifiedPollsRef.current.delete(poll.id);
 			}
 		});
 		

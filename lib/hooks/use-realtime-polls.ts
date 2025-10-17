@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Poll } from '@/lib/db/polls';
+import { Poll, PollOption } from '@/lib/db/polls';
 
 export function useRealtimePolls(companyId: string, userId: string, initialPolls: Poll[] = []) {
   const [polls, setPolls] = useState<Poll[]>(initialPolls);
@@ -187,19 +187,23 @@ export function useRealtimePolls(companyId: string, userId: string, initialPolls
       );
 
       // Debug: Log vote data for troubleshooting
-      console.log('Fetching polls for company:', companyId, 'user:', userId);
-      console.log('Polls found:', pollsData?.length || 0);
-      console.log('Options found:', optionsResult.data?.length || 0);
-      console.log('Votes found:', votesResult.data?.length || 0);
+      console.log('📊 fetchPolls (useRealtimePolls) - Raw data:', {
+        polls: pollsData?.length || 0,
+        options: optionsResult.data?.length || 0,
+        votes: votesResult.data?.length || 0,
+        companyId,
+        userId
+      });
       
       if (votesResult.data && votesResult.data.length > 0) {
-        console.log('Vote data for user', userId, ':', votesResult.data);
-        console.log('Processed polls with user_voted status:', processedPolls.map(p => ({
+        console.log('📊 Vote data for user', userId, ':', votesResult.data);
+        console.log('📊 Processed polls with vote details:', processedPolls.map(p => ({
           id: p.id,
           question: p.question.substring(0, 50) + '...',
           user_voted: p.user_voted,
           user_vote_option_id: p.user_vote_option_id,
-          total_votes: p.total_votes
+          total_votes: p.total_votes,
+          options: p.options.map((opt: PollOption) => ({ id: opt.id, vote_count: opt.vote_count, percentage: opt.percentage }))
         })));
       }
 
@@ -214,12 +218,20 @@ export function useRealtimePolls(companyId: string, userId: string, initialPolls
 
   // Optimized real-time update handler
   const handleRealtimeUpdate = useCallback((payload: any) => {
-    console.log('Real-time update received:', payload);
+    console.log('🔄 Real-time polls update received:', {
+      table: payload.table,
+      eventType: payload.eventType,
+      new: payload.new,
+      old: payload.old,
+      companyId
+    });
     
+    // For vote changes, we need to refetch to get updated vote counts
+    // For poll changes, we also need to refetch to get updated status
     // Always refetch for any change to ensure consistency
-    // This is especially important for vote updates
+    console.log('🔄 Refetching polls due to real-time update...');
     fetchPolls();
-  }, [fetchPolls]);
+  }, [fetchPolls, companyId]);
 
   useEffect(() => {
     fetchPolls();
@@ -246,7 +258,12 @@ export function useRealtimePolls(companyId: string, userId: string, initialPolls
             event: '*',
             schema: 'public',
             table: table,
-            ...(table === 'polls' ? { filter: `company_id=eq.${companyId}` } : {})
+            ...(table === 'polls' ? { 
+              filter: `company_id=eq.${companyId}` 
+            } : table === 'poll_votes' ? {
+              // For votes, we need to listen to all votes and filter in the handler
+              // since we can't filter votes by company_id directly
+            } : {})
           },
           (payload) => {
             console.log(`Real-time update from ${table}:`, payload);

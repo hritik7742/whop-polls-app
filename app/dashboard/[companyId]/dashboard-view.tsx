@@ -303,16 +303,16 @@ export function DashboardView({
 									<span className="sm:hidden">Pro</span>
 								</Badge>
 							) : (
-								<Button
-									onClick={() => setIsUpgradeModalOpen(true)}
-									variant="outline"
+							<Button
+								onClick={() => setIsUpgradeModalOpen(true)}
+								variant="outline"
 									className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950 text-xs sm:text-sm px-2 sm:px-4"
-									size="sm"
-								>
-									<Crown className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+								size="sm"
+							>
+								<Crown className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
 									<span className="hidden sm:inline">Upgrade to Pro</span>
 									<span className="sm:hidden">Pro</span>
-								</Button>
+							</Button>
 							)}
 							<Button
 								onClick={() => setIsCreateDialogOpen(true)}

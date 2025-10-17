@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Poll } from '@/lib/db/polls';
+import { Poll, PollOption } from '@/lib/db/polls';
 
 interface UseRealtimeCrudProps {
   companyId: string;
@@ -27,7 +27,7 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
         .filter((option: any) => option.poll_id === poll.id)
         .map((option: any) => ({
           ...option,
-          vote_count: 0,
+          // Keep the vote_count from the database (updated by increment_vote_count function)
           percentage: 0
         }));
 
@@ -41,17 +41,14 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
       });
     });
 
-    // Then, add votes to polls
+    // Then, add votes to polls (for user vote tracking only)
     votesData.forEach((vote: any) => {
       const poll = pollsMap.get(vote.poll_id);
       if (poll) {
         poll.votes.push(vote);
         
-        // Update option vote counts
-        const option = poll.options.find((opt: any) => opt.id === vote.option_id);
-        if (option) {
-          option.vote_count += 1;
-        }
+        // Note: vote_count is already set from the database (poll_options table)
+        // We don't need to increment it here since it's maintained by the increment_vote_count function
       }
     });
 
@@ -204,16 +201,30 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
       }
 
       const pollsData = pollsResult.data || [];
-      console.log('fetchPolls - Raw polls data:', pollsData.length, pollsData.map(p => ({ id: p.id, status: p.status })));
+      const optionsData = optionsResult.data || [];
+      const votesData = votesResult.data || [];
+      
+      console.log('📊 fetchPolls - Raw data:', {
+        polls: pollsData.length,
+        options: optionsData.length,
+        votes: votesData.length,
+        companyId,
+        experienceId
+      });
       
       const processedPolls = processPollsData(
         pollsData,
-        optionsResult.data || [],
-        votesResult.data || [],
+        optionsData,
+        votesData,
         userId
       );
 
-      console.log('fetchPolls - Processed polls:', processedPolls.length, processedPolls.map(p => ({ id: p.id, status: p.status })));
+      console.log('📊 fetchPolls - Processed polls:', processedPolls.length, processedPolls.map(p => ({ 
+        id: p.id, 
+        status: p.status,
+        total_votes: p.total_votes,
+        options: p.options.map((opt: PollOption) => ({ id: opt.id, vote_count: opt.vote_count, percentage: opt.percentage }))
+      })));
       setPolls(processedPolls);
     } catch (error) {
       console.error('Error fetching polls:', error);
@@ -225,12 +236,21 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
 
   // Real-time update handler
   const handleRealtimeUpdate = useCallback((payload: any) => {
-    console.log('Real-time CRUD update received:', payload);
+    console.log('🔄 Real-time CRUD update received:', {
+      table: payload.table,
+      eventType: payload.eventType,
+      new: payload.new,
+      old: payload.old,
+      companyId,
+      experienceId
+    });
     
+    // For vote changes, we need to refetch to get updated vote counts
+    // For poll changes, we also need to refetch to get updated status
     // Always refetch for any change to ensure consistency
-    // This is especially important for vote updates and status changes
+    console.log('🔄 Refetching polls due to real-time update...');
     fetchPolls();
-  }, [fetchPolls]);
+  }, [fetchPolls, companyId, experienceId]);
 
   // Set up real-time subscriptions
   useEffect(() => {
@@ -265,6 +285,9 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
             table: table,
             ...(table === 'polls' ? { 
               filter: experienceId ? `experience_id=eq.${experienceId}` : `company_id=eq.${companyId}` 
+            } : table === 'poll_votes' ? {
+              // For votes, we need to listen to all votes and filter in the handler
+              // since we can't filter votes by company_id directly
             } : {})
           },
           (payload) => {

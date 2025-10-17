@@ -21,11 +21,11 @@ export function VoteOption({
       <Button
         variant="ghost"
         className={cn(
-          "w-full p-4 h-auto justify-start text-left transition-all duration-200 relative overflow-hidden",
-          "bg-muted/50 border border-border",
-          "hover:bg-muted hover:border-border/80",
-          isSelected && "bg-primary/10 border-primary/30",
-          !canVote && "cursor-default hover:bg-muted/50",
+          "w-full p-4 h-auto justify-start text-left transition-all duration-300 relative overflow-hidden hover-lift",
+          "bg-muted/50 border border-border dark:bg-muted/30 dark:border-border/50",
+          "hover:bg-muted hover:border-border/80 dark:hover:bg-muted/50 dark:hover:border-border/70",
+          isSelected && "bg-primary/10 border-primary/30 dark:bg-primary/20 dark:border-primary/40",
+          !canVote && "cursor-default hover:bg-muted/50 dark:hover:bg-muted/30",
           isVoting && "opacity-50 cursor-not-allowed"
         )}
         onClick={canVote ? onVote : undefined}

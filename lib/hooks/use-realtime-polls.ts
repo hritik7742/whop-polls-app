@@ -215,12 +215,11 @@ export function useRealtimePolls(companyId: string, userId: string, initialPolls
   // Optimized real-time update handler
   const handleRealtimeUpdate = useCallback((payload: any) => {
     console.log('Real-time update received:', payload);
-    console.log('Current polls before update:', polls.length);
     
     // Always refetch for any change to ensure consistency
     // This is especially important for vote updates
     fetchPolls();
-  }, [fetchPolls, polls.length]);
+  }, [fetchPolls]);
 
   useEffect(() => {
     fetchPolls();

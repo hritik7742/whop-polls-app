@@ -226,73 +226,71 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
   // Real-time update handler
   const handleRealtimeUpdate = useCallback((payload: any) => {
     console.log('Real-time CRUD update received:', payload);
-    console.log('Current polls before refetch:', polls.length);
     
     // Always refetch for any change to ensure consistency
     // This is especially important for vote updates and status changes
     fetchPolls();
-  }, [fetchPolls, polls.length]);
+  }, [fetchPolls]);
 
   // Set up real-time subscriptions
   useEffect(() => {
-    // TEMPORARILY DISABLED: Add a small delay to prevent race condition with initial polls
-    // const timer = setTimeout(() => {
-    //   fetchPolls();
-    // }, 100);
+    // Add a small delay to prevent race condition with initial polls
+    const timer = setTimeout(() => {
+      fetchPolls();
+    }, 100);
 
-    // TEMPORARILY DISABLED: Set up real-time subscriptions only if Supabase is configured
-    // This is disabled to debug the poll disappearing issue
+    // Set up real-time subscriptions only if Supabase is configured
     if (!supabase) {
       return;
     }
 
-    console.log('🔧 Real-time subscriptions temporarily disabled for debugging');
+    console.log('🔧 Setting up real-time subscriptions for polls');
 
     // Clear existing subscriptions
     subscriptionsRef.current.forEach(sub => sub.unsubscribe());
     subscriptionsRef.current = [];
 
-    // DISABLED: Create subscriptions for all three tables
-    // const tables = ['polls', 'poll_options', 'poll_votes'];
+    // Create subscriptions for all three tables
+    const tables = ['polls', 'poll_options', 'poll_votes'];
     
-    // tables.forEach(table => {
-    //   const channelName = `crud_${table}_changes_${companyId}_${userId}`;
-    //   const subscription = supabase!
-    //     .channel(channelName)
-    //     .on(
-    //       'postgres_changes',
-    //       {
-    //         event: '*',
-    //         schema: 'public',
-    //         table: table,
-    //         ...(table === 'polls' ? { 
-    //           filter: experienceId ? `experience_id=eq.${experienceId}` : `company_id=eq.${companyId}` 
-    //         } : {})
-    //       },
-    //       (payload) => {
-    //         console.log(`Real-time CRUD update from ${table}:`, payload);
-    //         handleRealtimeUpdate(payload);
-    //       }
-    //     )
-    //     .subscribe((status) => {
-    //       console.log(`CRUD subscription status for ${table}:`, status);
-    //       if (status === 'SUBSCRIBED') {
-    //         console.log(`✅ Subscribed to ${table} CRUD changes for ${experienceId ? `experience ${experienceId}` : `company ${companyId}`}`);
-    //       } else if (status === 'CHANNEL_ERROR') {
-    //         console.error(`❌ Error subscribing to ${table} CRUD changes`);
-    //         setError(`Failed to subscribe to ${table} updates`);
-    //       } else if (status === 'TIMED_OUT') {
-    //         console.warn(`⏰ Subscription to ${table} CRUD timed out`);
-    //       } else if (status === 'CLOSED') {
-    //         console.log(`🔒 Subscription to ${table} CRUD closed`);
-    //       }
-    //     });
+    tables.forEach(table => {
+      const channelName = `crud_${table}_changes_${companyId}_${userId}`;
+      const subscription = supabase!
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: table,
+            ...(table === 'polls' ? { 
+              filter: experienceId ? `experience_id=eq.${experienceId}` : `company_id=eq.${companyId}` 
+            } : {})
+          },
+          (payload) => {
+            console.log(`Real-time CRUD update from ${table}:`, payload);
+            handleRealtimeUpdate(payload);
+          }
+        )
+        .subscribe((status) => {
+          console.log(`CRUD subscription status for ${table}:`, status);
+          if (status === 'SUBSCRIBED') {
+            console.log(`✅ Subscribed to ${table} CRUD changes for ${experienceId ? `experience ${experienceId}` : `company ${companyId}`}`);
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error(`❌ Error subscribing to ${table} CRUD changes`);
+            setError(`Failed to subscribe to ${table} updates`);
+          } else if (status === 'TIMED_OUT') {
+            console.warn(`⏰ Subscription to ${table} CRUD timed out`);
+          } else if (status === 'CLOSED') {
+            console.log(`🔒 Subscription to ${table} CRUD closed`);
+          }
+        });
       
-    //   subscriptionsRef.current.push(subscription);
-    // });
+      subscriptionsRef.current.push(subscription);
+    });
 
     return () => {
-      // clearTimeout(timer); // Timer disabled
+      clearTimeout(timer);
       subscriptionsRef.current.forEach(sub => sub.unsubscribe());
       subscriptionsRef.current = [];
     };

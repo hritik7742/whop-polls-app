@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Poll } from '@/lib/db/polls';
 import { PollsList } from '@/components/polls-list';
-import { useRealtimeCrud } from '@/lib/hooks/use-realtime-crud';
+import { useRealtimePolls } from '@/lib/hooks/use-realtime-polls';
 import { useScheduledActivation } from '@/lib/hooks/use-scheduled-activation';
 import { useToast } from '@/components/ui/use-toast';
 import { PollsListSkeleton } from '@/components/loading-skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ExperienceViewProps } from '@/lib/types';
+import { ThemeToggle } from '@/components/theme-toggle';
 // Removed direct SDK import - will use API instead
 
 export function ExperienceView({
@@ -24,20 +25,8 @@ export function ExperienceView({
 	const [activeTab, setActiveTab] = useState('active');
 	const { toast } = useToast();
 	
-	// Use comprehensive real-time CRUD hook for live updates
-	const { 
-		polls: allPolls, 
-		loading, 
-		optimisticVote,
-		optimisticCreatePoll,
-		optimisticDeletePoll,
-		optimisticUpdatePoll
-	} = useRealtimeCrud({ 
-		companyId: experience.company?.id || experience.id, 
-		experienceId: experience.id,
-		userId, 
-		initialPolls 
-	});
+	// Use real-time polls hook for live updates
+	const { polls: allPolls, loading, optimisticVote } = useRealtimePolls(experience.company?.id || experience.id, userId, initialPolls);
 	
 	// Background activation of scheduled polls
 	useScheduledActivation();
@@ -182,7 +171,15 @@ export function ExperienceView({
 	console.log('Experience view - All polls:', allPolls.length);
 	console.log('Experience view - Active tab:', activeTab);
 	console.log('Experience view - Filtered polls:', polls.length);
-	console.log('Experience view - Poll statuses:', allPolls.map(p => ({ id: p.id, status: p.status, question: p.question.substring(0, 30) + '...' })));
+	console.log('Experience view - Experience ID:', experience.id);
+	console.log('Experience view - Company ID:', experience.company?.id || experience.id);
+	console.log('Experience view - Poll statuses:', allPolls.map(p => ({ 
+		id: p.id, 
+		status: p.status, 
+		experience_id: p.experience_id,
+		company_id: p.company_id,
+		question: p.question.substring(0, 30) + '...' 
+	})));
 
 
 	const handleVote = async (pollId: string, optionId: string) => {
@@ -226,9 +223,9 @@ export function ExperienceView({
 	};
 
 	return (
-		<div className="min-h-screen bg-background">
+		<div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 dark:from-background dark:via-background dark:to-muted/10 transition-colors duration-300">
 			{/* Minimal Header */}
-			<div className="bg-card border-b border-border sticky top-0 z-50">
+			<div className="bg-card/50 backdrop-blur-sm border-b border-border sticky top-0 z-50 dark:bg-card/30 dark:backdrop-blur-md transition-colors duration-300">
 				<div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -247,6 +244,7 @@ export function ExperienceView({
 							</div>
 						</div>
 						<div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+							<ThemeToggle />
 							<div className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
 								Member
 							</div>

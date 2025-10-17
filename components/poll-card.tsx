@@ -43,7 +43,7 @@ export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumbe
   const canVote = status === 'active';
 
   return (
-    <Card className={`hover:shadow-md transition-shadow duration-200 ${isHighlighted ? 'ring-2 ring-primary ring-opacity-50 bg-primary/5' : ''}`}>
+    <Card className={`hover:shadow-md transition-all duration-300 hover-lift ${isHighlighted ? 'ring-2 ring-primary ring-opacity-50 bg-primary/5 dark:bg-primary/10' : ''}`}>
       <CardHeader className="pb-3 sm:pb-6">
         <CardTitle className="text-lg sm:text-2xl leading-tight">
           {showNumber && pollNumber && (

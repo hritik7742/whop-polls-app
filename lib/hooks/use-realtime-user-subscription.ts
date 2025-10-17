@@ -59,6 +59,31 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
     });
   }, []);
 
+  // Optimistic poll deletion - decrement usage immediately
+  const optimisticDeletePoll = useCallback(() => {
+    setData(prevData => {
+      if (!prevData) return prevData;
+      
+      const newTotalPolls = Math.max(0, prevData.usage.total_polls_created - 1);
+      const newActivePolls = Math.max(0, prevData.usage.active_polls_count - 1);
+      const isProUser = prevData.subscription.subscription_status === 'pro';
+      const freeLimit = 3;
+      const pollsRemaining = isProUser ? Infinity : Math.max(0, freeLimit - newTotalPolls);
+      const canCreatePoll = isProUser || newTotalPolls < freeLimit;
+      
+      return {
+        ...prevData,
+        usage: {
+          ...prevData.usage,
+          total_polls_created: newTotalPolls,
+          active_polls_count: newActivePolls
+        },
+        canCreatePoll,
+        pollsRemaining
+      };
+    });
+  }, []);
+
   // Optimistic subscription upgrade - upgrade to pro immediately
   const optimisticUpgradeToPro = useCallback(() => {
     setData(prevData => {
@@ -90,15 +115,6 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
     try {
       setError(null);
       
-      // Fetch user poll usage
-      const { data: usageData, error: usageError } = await supabase
-        .from('user_poll_usage')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('company_id', companyId)
-        .eq('experience_id', experienceId || companyId)
-        .single();
-
       // Fetch user subscription
       const { data: subscriptionData, error: subscriptionError } = await supabase
         .from('user_subscriptions')
@@ -108,19 +124,33 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
         .eq('experience_id', experienceId || companyId)
         .single();
 
-      if (usageError && usageError.code !== 'PGRST116') {
-        console.error('Error fetching user usage:', usageError);
-      }
+      // Calculate poll usage directly from polls table (more reliable)
+      const { data: pollsData, error: pollsError } = await supabase
+        .from('polls')
+        .select('id, created_at, status')
+        .eq('creator_user_id', userId)
+        .eq('company_id', companyId)
+        .eq('experience_id', experienceId || companyId);
 
       if (subscriptionError && subscriptionError.code !== 'PGRST116') {
         console.error('Error fetching user subscription:', subscriptionError);
       }
 
-      // Calculate subscription status
-      const usage = usageData || {
-        total_polls_created: 0,
-        active_polls_count: 0,
-        last_poll_created_at: null
+      if (pollsError) {
+        console.error('Error fetching user polls:', pollsError);
+      }
+
+      // Calculate usage from actual polls data
+      const totalPollsCreated = pollsData?.length || 0;
+      const activePollsCount = pollsData?.filter(poll => poll.status === 'active').length || 0;
+      const lastPollCreatedAt = pollsData && pollsData.length > 0 
+        ? pollsData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
+        : null;
+
+      const usage = {
+        total_polls_created: totalPollsCreated,
+        active_polls_count: activePollsCount,
+        last_poll_created_at: lastPollCreatedAt
       };
 
       const subscription = subscriptionData || {
@@ -135,6 +165,17 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
       const freeLimit = 3; // Free users can create 3 polls
       const pollsRemaining = isProUser ? Infinity : Math.max(0, freeLimit - usage.total_polls_created);
       const canCreatePoll = isProUser || usage.total_polls_created < freeLimit;
+
+      console.log('User subscription data:', {
+        userId,
+        companyId,
+        experienceId,
+        usage,
+        subscription,
+        isProUser,
+        canCreatePoll,
+        pollsRemaining
+      });
 
       setData({
         usage,
@@ -173,8 +214,8 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
     subscriptionsRef.current.forEach(sub => sub.unsubscribe());
     subscriptionsRef.current = [];
 
-    // Create subscriptions for user subscription tables
-    const tables = ['user_poll_usage', 'user_subscriptions'];
+    // Create subscriptions for user subscription tables AND polls table
+    const tables = ['user_subscriptions', 'polls'];
     
     tables.forEach(table => {
       const channelName = `user_subscription_${table}_changes_${userId}_${companyId}`;
@@ -186,7 +227,7 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
             event: '*',
             schema: 'public',
             table: table,
-            filter: `user_id=eq.${userId}`
+            ...(table === 'polls' ? { filter: `company_id=eq.${companyId}` } : { filter: `user_id=eq.${userId}` })
           },
           (payload) => {
             console.log(`Real-time user subscription update from ${table}:`, payload);
@@ -217,11 +258,16 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
   }, [userId, companyId, fetchUserSubscription, handleRealtimeUpdate]);
 
   return { 
-    ...data,
+    usage: data?.usage,
+    subscription: data?.subscription,
+    canCreatePoll: data?.canCreatePoll,
+    isProUser: data?.isProUser,
+    pollsRemaining: data?.pollsRemaining,
     loading, 
     error, 
     refetch: fetchUserSubscription,
     optimisticCreatePoll,
+    optimisticDeletePoll,
     optimisticUpgradeToPro
   };
 }

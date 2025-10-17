@@ -18,6 +18,7 @@ import { useRealtimeUserSubscription } from '@/lib/hooks/use-realtime-user-subsc
 import { useRealtimeExperiences } from '@/lib/hooks/use-realtime-experiences';
 import { DashboardViewProps } from '@/lib/types';
 import { whopSdk } from '@/lib/whop-sdk';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export function DashboardView({
 	user,
@@ -65,7 +66,14 @@ export function DashboardView({
 		companyId,
 		experienceId,
 		pollsCount: polls?.length || 0,
-		polls: polls?.map(p => ({ id: p.id, question: p.question.substring(0, 50) + '...', status: p.status }))
+		experiences: realtimeExperiences?.map(exp => ({ id: exp.id, name: exp.name })),
+		polls: polls?.map(p => ({ 
+			id: p.id, 
+			question: p.question.substring(0, 50) + '...', 
+			status: p.status,
+			experience_id: p.experience_id,
+			company_id: p.company_id
+		}))
 	});
 	
 	// Background activation of scheduled polls
@@ -78,6 +86,7 @@ export function DashboardView({
 		isProUser, 
 		pollsRemaining,
 		optimisticCreatePoll: optimisticCreatePollUsage,
+		optimisticDeletePoll: optimisticDeletePollUsage,
 		optimisticUpgradeToPro
 	} = useRealtimeUserSubscription({
 		userId,
@@ -221,6 +230,8 @@ export function DashboardView({
 		try {
 			// Remove poll from UI immediately (optimistic update)
 			optimisticDeletePoll(pollId);
+			// Also update usage counter immediately (optimistic update)
+			optimisticDeletePollUsage();
 			
 			const response = await fetch(`/api/polls/${pollId}`, {
 				method: 'DELETE',
@@ -257,9 +268,9 @@ export function DashboardView({
 
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+		<div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 dark:from-background dark:via-background dark:to-muted/10 transition-colors duration-300">
 			{/* Professional Header */}
-			<div className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+			<div className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50 dark:bg-card/30 dark:backdrop-blur-md transition-colors duration-300">
 				<div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
@@ -276,6 +287,7 @@ export function DashboardView({
 							</div>
 						</div>
 						<div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+							<ThemeToggle />
 							<Badge variant="secondary" className="px-2 py-1 sm:px-3 text-xs sm:text-sm hidden sm:inline-flex">
 								{accessLevel}
 							</Badge>
@@ -284,24 +296,24 @@ export function DashboardView({
 									{usage?.total_polls_created || 0}/3 polls
 								</Badge>
 							)}
-							<Button
-								onClick={() => setIsUpgradeModalOpen(true)}
-								variant="outline"
-								className={`${
-									isProUser 
-										? 'border-green-200 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950' 
-										: 'border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950'
-								} text-xs sm:text-sm px-2 sm:px-4`}
-								size="sm"
-							>
-								<Crown className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-								<span className="hidden sm:inline">
-									{isProUser ? 'Pro Active' : 'Upgrade to Pro'}
-								</span>
-								<span className="sm:hidden">
-									{isProUser ? 'Pro' : 'Pro'}
-								</span>
-							</Button>
+							{isProUser ? (
+								<Badge variant="default" className="px-2 py-1 sm:px-3 text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white">
+									<Crown className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+									<span className="hidden sm:inline">Pro Activated</span>
+									<span className="sm:hidden">Pro</span>
+								</Badge>
+							) : (
+								<Button
+									onClick={() => setIsUpgradeModalOpen(true)}
+									variant="outline"
+									className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950 text-xs sm:text-sm px-2 sm:px-4"
+									size="sm"
+								>
+									<Crown className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+									<span className="hidden sm:inline">Upgrade to Pro</span>
+									<span className="sm:hidden">Pro</span>
+								</Button>
+							)}
 							<Button
 								onClick={() => setIsCreateDialogOpen(true)}
 								className="bg-primary hover:bg-primary/90 shadow-sm text-xs sm:text-sm px-2 sm:px-4"
@@ -338,45 +350,6 @@ export function DashboardView({
 				</div>
 			</div>
 
-			{/* Real-time Usage Display */}
-			{!isProUser && (
-				<div className="border-b bg-amber-50 dark:bg-amber-950/20">
-					<div className="container mx-auto px-4 sm:px-6 py-3">
-						<div className="flex items-center justify-between">
-							<div className="flex items-center gap-3">
-								<div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-									<svg className="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-									</svg>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-										Free Plan Usage
-									</p>
-									<p className="text-xs text-amber-600 dark:text-amber-400">
-										{usage?.total_polls_created || 0} of 3 polls created
-									</p>
-								</div>
-							</div>
-							<div className="flex items-center gap-2">
-								<div className="w-20 bg-amber-200 dark:bg-amber-800 rounded-full h-2">
-									<div 
-										className="bg-amber-500 h-2 rounded-full transition-all duration-300" 
-										style={{ width: `${Math.min(((usage?.total_polls_created || 0) / 3) * 100, 100)}%` }}
-									></div>
-								</div>
-								<Button
-									onClick={() => setIsUpgradeModalOpen(true)}
-									size="sm"
-									className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3"
-								>
-									Upgrade
-								</Button>
-							</div>
-						</div>
-					</div>
-				</div>
-			)}
 
 			{/* Main Content */}
 			<div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">

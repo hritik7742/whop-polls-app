@@ -10,7 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { PollCardProps } from '@/lib/types';
 
 export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumber = false, isHighlighted = false }: PollCardProps) {
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [selectedOption, setSelectedOption] = useState<string | null>(
+    poll.user_vote_option_id || null
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleVote = async (optionId: string) => {
@@ -71,7 +73,7 @@ export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumbe
             key={option.id}
             option={option}
             isSelected={selectedOption === option.id}
-            isVoted={selectedOption !== null} // Only show results after current user votes
+            isVoted={selectedOption !== null || !!poll.user_voted} // Show results if user has voted (current or previous)
             canVote={canVote}
             onVote={() => handleVote(option.id)}
             isVoting={isVoting || isSubmitting}
@@ -80,7 +82,7 @@ export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumbe
       </CardContent>
 
       {/* Footer */}
-      {selectedOption && (
+      {(selectedOption || poll.user_voted) && (
         <div className="flex items-center gap-3 px-4 sm:px-6 pb-4 sm:pb-6 border-t border-border">
           <div className="p-1.5 sm:p-2 bg-green-100 rounded-full">
             <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />

@@ -67,10 +67,16 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
     return Array.from(pollsMap.values()).map(poll => {
       const totalVotes = poll.options.reduce((sum: number, option: any) => sum + option.vote_count, 0);
       
-      // Ensure options stay in original order (by created_at)
-      const sortedOptions = [...poll.options].sort((a, b) => 
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
+      // Ensure options stay in original order (by created_at with id fallback)
+      const sortedOptions = [...poll.options].sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        if (timeA !== timeB) {
+          return timeA - timeB;
+        }
+        // Fallback to id for consistent ordering when timestamps are identical
+        return a.id.localeCompare(b.id);
+      });
       
       return {
         ...poll,
@@ -192,7 +198,7 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
 
       const [pollsResult, optionsResult, votesResult] = await Promise.all([
         pollQuery,
-        supabase.from('poll_options').select('*'),
+        supabase.from('poll_options').select('*').order('created_at', { ascending: true }).order('id', { ascending: true }),
         supabase.from('poll_votes').select('*')
       ]);
 

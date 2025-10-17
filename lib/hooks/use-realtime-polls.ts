@@ -80,9 +80,17 @@ export function useRealtimePolls(companyId: string, userId: string, initialPolls
       }
     });
 
-    // Sort options by created_at to maintain original order
+    // Sort options by created_at to maintain original order (with fallback to id for consistency)
     pollsMap.forEach(poll => {
-      poll.options.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      poll.options.sort((a: any, b: any) => {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        if (timeA !== timeB) {
+          return timeA - timeB;
+        }
+        // Fallback to id for consistent ordering when timestamps are identical
+        return a.id.localeCompare(b.id);
+      });
     });
 
     // Add votes to polls and calculate totals
@@ -113,10 +121,16 @@ export function useRealtimePolls(companyId: string, userId: string, initialPolls
     return Array.from(pollsMap.values()).map(poll => {
       const totalVotes = poll.options.reduce((sum: number, option: any) => sum + option.vote_count, 0);
       
-      // Ensure options stay in original order (by created_at)
-      const sortedOptions = [...poll.options].sort((a, b) => 
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
+      // Ensure options stay in original order (by created_at with id fallback)
+      const sortedOptions = [...poll.options].sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        if (timeA !== timeB) {
+          return timeA - timeB;
+        }
+        // Fallback to id for consistent ordering when timestamps are identical
+        return a.id.localeCompare(b.id);
+      });
       
       return {
         ...poll,
@@ -173,7 +187,8 @@ export function useRealtimePolls(companyId: string, userId: string, initialPolls
           .from('poll_options')
           .select('*')
           .in('poll_id', pollIds)
-          .order('created_at', { ascending: true }), // Ensure options are in creation order
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }), // Secondary sort by id for consistency
         supabase
           .from('poll_votes')
           .select('user_id, option_id, poll_id')

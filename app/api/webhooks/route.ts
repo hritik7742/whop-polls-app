@@ -8,19 +8,23 @@ const validateWebhook = makeWebhookValidator({
 });
 
 export async function POST(request: NextRequest): Promise<Response> {
+	const timestamp = new Date().toISOString();
+	
 	try {
-		console.log('🔔 Webhook received:', {
-			headers: Object.fromEntries(request.headers.entries()),
-			url: request.url
-		});
+		console.log('\n' + '='.repeat(80));
+		console.log(`🔔 WEBHOOK RECEIVED - ${timestamp}`);
+		console.log('='.repeat(80));
+		console.log('📋 Headers:', Object.fromEntries(request.headers.entries()));
+		console.log('🌐 URL:', request.url);
+		console.log('⏰ Timestamp:', timestamp);
 
 		// Validate the webhook to ensure it's from Whop
 		const webhook = await validateWebhook(request);
 		
-		console.log('✅ Webhook validated successfully:', {
-			action: webhook.action,
-			data: webhook.data
-		});
+		console.log('\n✅ WEBHOOK VALIDATED SUCCESSFULLY');
+		console.log('🎯 Action:', webhook.action);
+		console.log('📊 Data:', JSON.stringify(webhook.data, null, 2));
+		console.log('='.repeat(80));
 
 		// Handle different subscription and payment events
 		switch (webhook.action) {
@@ -38,6 +42,12 @@ export async function POST(request: NextRequest): Promise<Response> {
 				break;
 			case "payment.failed":
 				after(handlePaymentFailed(webhook.data));
+				break;
+			case "payment.pending":
+				after(handlePaymentPending(webhook.data));
+				break;
+			case "refund.created":
+				after(handleRefundCreated(webhook.data));
 				break;
 			default:
 				console.log('⚠️ Unhandled webhook action:', webhook.action);
@@ -67,7 +77,9 @@ export async function POST(request: NextRequest): Promise<Response> {
 
 async function handleMembershipValid(data: any) {
 	try {
-		console.log('🎉 Membership became valid:', data);
+		console.log('\n🎉 MEMBERSHIP BECAME VALID EVENT');
+		console.log('='.repeat(50));
+		console.log('📊 Full Membership Data:', JSON.stringify(data, null, 2));
 		
 		const { user_id, access_pass_id, company_id } = data;
 		
@@ -103,8 +115,15 @@ async function handleMembershipValid(data: any) {
 			console.log('✅ Subscription updated to pro:', subscriptionData);
 		}
 
+		console.log('✅ Membership valid handling completed');
+		console.log('='.repeat(50));
+
 	} catch (error) {
-		console.error('❌ Error handling membership valid:', error);
+		console.error('\n❌ ERROR HANDLING MEMBERSHIP VALID:');
+		console.error('='.repeat(50));
+		console.error('Error:', error);
+		console.error('Data:', data);
+		console.error('='.repeat(50));
 	}
 }
 
@@ -189,29 +208,50 @@ async function handleCancelAtPeriodEnd(data: any) {
 
 async function handlePaymentSucceeded(data: any) {
 	try {
-		console.log('💰 Payment succeeded:', data);
+		console.log('\n💰 PAYMENT SUCCEEDED EVENT');
+		console.log('='.repeat(50));
+		console.log('📊 Full Payment Data:', JSON.stringify(data, null, 2));
 		
 		const { id, user_id, final_amount, currency, amount_after_fees, metadata } = data;
 		
-		// Log successful payment
-		console.log(`Payment ${id} succeeded for ${user_id} with amount ${final_amount} ${currency}`);
+		console.log('\n📋 Payment Summary:');
+		console.log(`   💳 Payment ID: ${id}`);
+		console.log(`   👤 User ID: ${user_id}`);
+		console.log(`   💰 Final Amount: ${final_amount} ${currency}`);
+		console.log(`   💸 Amount After Fees: ${amount_after_fees} ${currency}`);
+		console.log(`   📝 Metadata:`, metadata);
 		
 		// You can add additional payment processing logic here
 		// For example, sending confirmation emails, updating payment records, etc.
 		
+		console.log('✅ Payment processing completed successfully');
+		console.log('='.repeat(50));
+		
 	} catch (error) {
-		console.error('❌ Error handling payment succeeded:', error);
+		console.error('\n❌ ERROR HANDLING PAYMENT SUCCEEDED:');
+		console.error('='.repeat(50));
+		console.error('Error:', error);
+		console.error('Data:', data);
+		console.error('='.repeat(50));
 	}
 }
 
 async function handlePaymentFailed(data: any) {
 	try {
-		console.log('💸 Payment failed:', data);
+		console.log('\n💸 PAYMENT FAILED EVENT');
+		console.log('='.repeat(50));
+		console.log('📊 Full Payment Failure Data:', JSON.stringify(data, null, 2));
 		
-		const { user_id, error_message } = data;
+		const { user_id, error_message, payment_id, amount, currency } = data;
+		
+		console.log('\n📋 Payment Failure Summary:');
+		console.log(`   👤 User ID: ${user_id}`);
+		console.log(`   💳 Payment ID: ${payment_id}`);
+		console.log(`   💰 Amount: ${amount} ${currency}`);
+		console.log(`   ❌ Error Message: ${error_message}`);
 		
 		// Handle failed payment (notify user, retry, etc.)
-		console.log(`Payment failed for user ${user_id}: ${error_message}`);
+		console.log(`\n🚨 Payment failed for user ${user_id}: ${error_message}`);
 		
 		// You can add logic here to:
 		// - Send notification to user
@@ -219,7 +259,73 @@ async function handlePaymentFailed(data: any) {
 		// - Update subscription status
 		// - Send to support team
 		
+		console.log('✅ Payment failure handling completed');
+		console.log('='.repeat(50));
+		
 	} catch (error) {
-		console.error('❌ Error handling payment failed:', error);
+		console.error('\n❌ ERROR HANDLING PAYMENT FAILED:');
+		console.error('='.repeat(50));
+		console.error('Error:', error);
+		console.error('Data:', data);
+		console.error('='.repeat(50));
+	}
+}
+
+async function handlePaymentPending(data: any) {
+	try {
+		console.log('\n⏳ PAYMENT PENDING EVENT');
+		console.log('='.repeat(50));
+		console.log('📊 Full Payment Pending Data:', JSON.stringify(data, null, 2));
+		
+		const { id, user_id, final_amount, currency, status } = data;
+		
+		console.log('\n📋 Payment Pending Summary:');
+		console.log(`   💳 Payment ID: ${id}`);
+		console.log(`   👤 User ID: ${user_id}`);
+		console.log(`   💰 Amount: ${final_amount} ${currency}`);
+		console.log(`   📊 Status: ${status}`);
+		
+		console.log('✅ Payment pending handling completed');
+		console.log('='.repeat(50));
+		
+	} catch (error) {
+		console.error('\n❌ ERROR HANDLING PAYMENT PENDING:');
+		console.error('='.repeat(50));
+		console.error('Error:', error);
+		console.error('Data:', data);
+		console.error('='.repeat(50));
+	}
+}
+
+async function handleRefundCreated(data: any) {
+	try {
+		console.log('\n💸 REFUND CREATED EVENT');
+		console.log('='.repeat(50));
+		console.log('📊 Full Refund Data:', JSON.stringify(data, null, 2));
+		
+		const { id, amount, currency, status, payment } = data;
+		
+		console.log('\n📋 Refund Summary:');
+		console.log(`   💳 Refund ID: ${id}`);
+		console.log(`   👤 User ID: ${payment?.user_id}`);
+		console.log(`   💰 Refund Amount: ${amount} ${currency}`);
+		console.log(`   📊 Status: ${status}`);
+		console.log(`   🔗 Original Payment ID: ${payment?.id}`);
+		
+		// You can add logic here to:
+		// - Update subscription status
+		// - Notify user about refund
+		// - Update payment records
+		// - Send to accounting system
+		
+		console.log('✅ Refund handling completed');
+		console.log('='.repeat(50));
+		
+	} catch (error) {
+		console.error('\n❌ ERROR HANDLING REFUND CREATED:');
+		console.error('='.repeat(50));
+		console.error('Error:', error);
+		console.error('Data:', data);
+		console.error('='.repeat(50));
 	}
 }

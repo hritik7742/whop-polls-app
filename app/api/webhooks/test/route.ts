@@ -2,66 +2,54 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const timestamp = new Date().toISOString();
     
-    console.log('🧪 Test webhook received:', {
-      headers: Object.fromEntries(request.headers.entries()),
-      body: body
-    });
-
-    // Simulate different webhook events for testing
-    const { eventType, userId, companyId } = body;
-
-    switch (eventType) {
-      case 'membership.went_valid':
-        console.log('✅ Simulating membership.went_valid event');
-        break;
-      case 'membership.went_invalid':
-        console.log('❌ Simulating membership.went_invalid event');
-        break;
-      case 'payment.succeeded':
-        console.log('💰 Simulating payment.succeeded event');
-        break;
-      case 'payment.failed':
-        console.log('💸 Simulating payment.failed event');
-        break;
-      case 'membership.cancel_at_period_end_changed':
-        console.log('⏰ Simulating membership.cancel_at_period_end_changed event');
-        break;
-      default:
-        console.log('⚠️ Unknown event type:', eventType);
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Test webhook processed: ${eventType}`,
+    console.log('\n' + '='.repeat(80));
+    console.log(`🧪 TEST WEBHOOK RECEIVED - ${timestamp}`);
+    console.log('='.repeat(80));
+    
+    const body = await request.json();
+    console.log('📊 Test Data:', JSON.stringify(body, null, 2));
+    console.log('📋 Headers:', Object.fromEntries(request.headers.entries()));
+    console.log('='.repeat(80));
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Test webhook received successfully',
+      timestamp,
       receivedData: body
     });
-
+    
   } catch (error) {
-    console.error('❌ Test webhook error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process test webhook' },
-      { status: 500 }
-    );
+    console.error('\n❌ TEST WEBHOOK ERROR:');
+    console.error('='.repeat(50));
+    console.error('Error:', error);
+    console.error('='.repeat(50));
+    
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Test webhook failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({
-    message: 'Webhook test endpoint',
-    usage: 'POST with { eventType, userId, companyId } to test webhook events',
-    examples: {
-      membership_went_valid: {
-        eventType: 'membership_went_valid',
-        userId: 'user_123',
-        companyId: 'biz_456'
-      },
-      payment_succeeded: {
-        eventType: 'payment_succeeded',
-        userId: 'user_123',
-        companyId: 'biz_456'
-      }
+  const timestamp = new Date().toISOString();
+  
+  console.log('\n' + '='.repeat(80));
+  console.log(`🧪 TEST WEBHOOK GET REQUEST - ${timestamp}`);
+  console.log('='.repeat(80));
+  console.log('✅ Webhook endpoint is working!');
+  console.log('='.repeat(80));
+  
+  return NextResponse.json({ 
+    success: true, 
+    message: 'Webhook endpoint is working',
+    timestamp,
+    endpoints: {
+      test: '/api/webhooks/test',
+      main: '/api/webhooks'
     }
   });
 }

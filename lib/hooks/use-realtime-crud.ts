@@ -13,7 +13,7 @@ interface UseRealtimeCrudProps {
 
 export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls = [] }: UseRealtimeCrudProps) {
   const [polls, setPolls] = useState<Poll[]>(initialPolls);
-  const [loading, setLoading] = useState(initialPolls.length === 0);
+  const [loading, setLoading] = useState(false); // Start with false since we have initial polls
   const [error, setError] = useState<string | null>(null);
   const subscriptionsRef = useRef<any[]>([]);
 
@@ -177,11 +177,8 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
     try {
       setError(null);
       
-      // First, activate any scheduled polls that are due
-      const { error: activateError } = await supabase.rpc('activate_scheduled_polls');
-      if (activateError) {
-        console.warn('Failed to activate scheduled polls:', activateError);
-      }
+      // Note: Status updates are handled server-side in getPollsByCompany/getPollsByExperience
+      // to avoid race conditions and duplicate updates
 
       // Build the query based on whether we're filtering by experience or company
       const pollQuery = supabase
@@ -207,6 +204,8 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
       }
 
       const pollsData = pollsResult.data || [];
+      console.log('fetchPolls - Raw polls data:', pollsData.length, pollsData.map(p => ({ id: p.id, status: p.status })));
+      
       const processedPolls = processPollsData(
         pollsData,
         optionsResult.data || [],
@@ -214,6 +213,7 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
         userId
       );
 
+      console.log('fetchPolls - Processed polls:', processedPolls.length, processedPolls.map(p => ({ id: p.id, status: p.status })));
       setPolls(processedPolls);
     } catch (error) {
       console.error('Error fetching polls:', error);
@@ -226,65 +226,73 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
   // Real-time update handler
   const handleRealtimeUpdate = useCallback((payload: any) => {
     console.log('Real-time CRUD update received:', payload);
+    console.log('Current polls before refetch:', polls.length);
     
     // Always refetch for any change to ensure consistency
     // This is especially important for vote updates and status changes
     fetchPolls();
-  }, [fetchPolls]);
+  }, [fetchPolls, polls.length]);
 
   // Set up real-time subscriptions
   useEffect(() => {
-    fetchPolls();
+    // TEMPORARILY DISABLED: Add a small delay to prevent race condition with initial polls
+    // const timer = setTimeout(() => {
+    //   fetchPolls();
+    // }, 100);
 
-    // Set up real-time subscriptions only if Supabase is configured
+    // TEMPORARILY DISABLED: Set up real-time subscriptions only if Supabase is configured
+    // This is disabled to debug the poll disappearing issue
     if (!supabase) {
       return;
     }
+
+    console.log('🔧 Real-time subscriptions temporarily disabled for debugging');
 
     // Clear existing subscriptions
     subscriptionsRef.current.forEach(sub => sub.unsubscribe());
     subscriptionsRef.current = [];
 
-    // Create subscriptions for all three tables
-    const tables = ['polls', 'poll_options', 'poll_votes'];
+    // DISABLED: Create subscriptions for all three tables
+    // const tables = ['polls', 'poll_options', 'poll_votes'];
     
-    tables.forEach(table => {
-      const channelName = `crud_${table}_changes_${companyId}_${userId}`;
-      const subscription = supabase!
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: table,
-            ...(table === 'polls' ? { 
-              filter: experienceId ? `experience_id=eq.${experienceId}` : `company_id=eq.${companyId}` 
-            } : {})
-          },
-          (payload) => {
-            console.log(`Real-time CRUD update from ${table}:`, payload);
-            handleRealtimeUpdate(payload);
-          }
-        )
-        .subscribe((status) => {
-          console.log(`CRUD subscription status for ${table}:`, status);
-          if (status === 'SUBSCRIBED') {
-            console.log(`✅ Subscribed to ${table} CRUD changes for ${experienceId ? `experience ${experienceId}` : `company ${companyId}`}`);
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error(`❌ Error subscribing to ${table} CRUD changes`);
-            setError(`Failed to subscribe to ${table} updates`);
-          } else if (status === 'TIMED_OUT') {
-            console.warn(`⏰ Subscription to ${table} CRUD timed out`);
-          } else if (status === 'CLOSED') {
-            console.log(`🔒 Subscription to ${table} CRUD closed`);
-          }
-        });
+    // tables.forEach(table => {
+    //   const channelName = `crud_${table}_changes_${companyId}_${userId}`;
+    //   const subscription = supabase!
+    //     .channel(channelName)
+    //     .on(
+    //       'postgres_changes',
+    //       {
+    //         event: '*',
+    //         schema: 'public',
+    //         table: table,
+    //         ...(table === 'polls' ? { 
+    //           filter: experienceId ? `experience_id=eq.${experienceId}` : `company_id=eq.${companyId}` 
+    //         } : {})
+    //       },
+    //       (payload) => {
+    //         console.log(`Real-time CRUD update from ${table}:`, payload);
+    //         handleRealtimeUpdate(payload);
+    //       }
+    //     )
+    //     .subscribe((status) => {
+    //       console.log(`CRUD subscription status for ${table}:`, status);
+    //       if (status === 'SUBSCRIBED') {
+    //         console.log(`✅ Subscribed to ${table} CRUD changes for ${experienceId ? `experience ${experienceId}` : `company ${companyId}`}`);
+    //       } else if (status === 'CHANNEL_ERROR') {
+    //         console.error(`❌ Error subscribing to ${table} CRUD changes`);
+    //         setError(`Failed to subscribe to ${table} updates`);
+    //       } else if (status === 'TIMED_OUT') {
+    //         console.warn(`⏰ Subscription to ${table} CRUD timed out`);
+    //       } else if (status === 'CLOSED') {
+    //         console.log(`🔒 Subscription to ${table} CRUD closed`);
+    //       }
+    //     });
       
-      subscriptionsRef.current.push(subscription);
-    });
+    //   subscriptionsRef.current.push(subscription);
+    // });
 
     return () => {
+      // clearTimeout(timer); // Timer disabled
       subscriptionsRef.current.forEach(sub => sub.unsubscribe());
       subscriptionsRef.current = [];
     };

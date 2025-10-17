@@ -11,8 +11,6 @@ export interface UserPollUsage {
 export interface UserSubscription {
   id: string;
   user_id: string;
-  company_id: string;
-  experience_id: string;
   subscription_status: 'free' | 'pro' | 'cancelled';
   plan_id?: string;
   access_pass_id?: string;
@@ -23,7 +21,7 @@ export interface UserSubscription {
 }
 
 /**
- * Get user's poll usage information
+ * Get user's poll usage information (simplified - user-based only)
  */
 export async function getUserPollUsage(
   userId: string,
@@ -33,22 +31,18 @@ export async function getUserPollUsage(
   const supabase = createServerClient();
   
   try {
-    // Get subscription status
+    // Get subscription status (user-based only)
     const { data: subscriptionData, error: subError } = await supabase
-      .from('user_subscriptions')
+      .from('user_subscriptions_simple')
       .select('subscription_status')
       .eq('user_id', userId)
-      .eq('company_id', companyId)
-      .eq('experience_id', experienceId)
       .single();
 
-    // Get poll usage data from user_poll_usage table
+    // Get poll usage data from user_poll_usage_simple table (user-based only)
     const { data: usageData, error: usageError } = await supabase
-      .from('user_poll_usage')
+      .from('user_poll_usage_simple')
       .select('total_polls_created, active_polls_count')
       .eq('user_id', userId)
-      .eq('company_id', companyId)
-      .eq('experience_id', experienceId)
       .single();
 
     const subscriptionStatus = subscriptionData?.subscription_status || 'free';
@@ -77,7 +71,7 @@ export async function getUserPollUsage(
 }
 
 /**
- * Check if user can create more polls
+ * Check if user can create more polls (simplified - user-based only)
  */
 export async function canUserCreatePoll(
   userId: string,
@@ -87,28 +81,25 @@ export async function canUserCreatePoll(
   const supabase = createServerClient();
   
   try {
-    // Check subscription status
+    // Check subscription status (user-based only)
     const { data: subscriptionData, error: subError } = await supabase
-      .from('user_subscriptions')
+      .from('user_subscriptions_simple')
       .select('subscription_status')
       .eq('user_id', userId)
-      .eq('company_id', companyId)
-      .eq('experience_id', experienceId)
       .single();
 
     // If user has pro subscription, they can create unlimited polls
     const subscriptionStatus = subscriptionData?.subscription_status || 'free';
     if (subscriptionStatus === 'pro') {
+      console.log(`✅ User ${userId} has pro subscription - unlimited polls allowed`);
       return true;
     }
 
-    // For free users, check active poll count from user_poll_usage table
+    // For free users, check active poll count from user_poll_usage_simple table
     const { data: usageData, error: usageError } = await supabase
-      .from('user_poll_usage')
+      .from('user_poll_usage_simple')
       .select('active_polls_count')
       .eq('user_id', userId)
-      .eq('company_id', companyId)
-      .eq('experience_id', experienceId)
       .single();
 
     if (usageError && usageError.code !== 'PGRST116') { // PGRST116 = no rows returned
@@ -117,7 +108,9 @@ export async function canUserCreatePoll(
     }
 
     const activePollsCount = usageData?.active_polls_count || 0;
-    return activePollsCount < 3; // Free users can create up to 3 active polls
+    const canCreate = activePollsCount < 3; // Free users can create up to 3 active polls
+    console.log(`📊 User ${userId} (free): ${activePollsCount}/3 active polls, can create: ${canCreate}`);
+    return canCreate;
   } catch (error) {
     console.error('Error checking poll creation permission:', error);
     return false;
@@ -125,7 +118,7 @@ export async function canUserCreatePoll(
 }
 
 /**
- * Create or update user subscription
+ * Create or update user subscription (simplified - user-based only)
  */
 export async function updateUserSubscription(
   userId: string,
@@ -142,15 +135,13 @@ export async function updateUserSubscription(
   const supabase = createServerClient();
   
   const { data, error } = await supabase
-    .from('user_subscriptions')
+    .from('user_subscriptions_simple')
     .upsert({
       user_id: userId,
-      company_id: companyId,
-      experience_id: experienceId,
       ...subscriptionData,
       updated_at: new Date().toISOString()
     }, {
-      onConflict: 'user_id,company_id,experience_id'
+      onConflict: 'user_id'
     })
     .select()
     .single();
@@ -164,7 +155,7 @@ export async function updateUserSubscription(
 }
 
 /**
- * Get user subscription
+ * Get user subscription (simplified - user-based only)
  */
 export async function getUserSubscription(
   userId: string,
@@ -174,11 +165,9 @@ export async function getUserSubscription(
   const supabase = createServerClient();
   
   const { data, error } = await supabase
-    .from('user_subscriptions')
+    .from('user_subscriptions_simple')
     .select('*')
     .eq('user_id', userId)
-    .eq('company_id', companyId)
-    .eq('experience_id', experienceId)
     .single();
 
   if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
@@ -190,7 +179,7 @@ export async function getUserSubscription(
 }
 
 /**
- * Initialize user subscription (called when user first accesses the app)
+ * Initialize user subscription (simplified - user-based only)
  */
 export async function initializeUserSubscription(
   userId: string,
@@ -202,11 +191,9 @@ export async function initializeUserSubscription(
   try {
     // Check if subscription already exists
     const { data: existing, error: checkError } = await supabase
-      .from('user_subscriptions')
+      .from('user_subscriptions_simple')
       .select('*')
       .eq('user_id', userId)
-      .eq('company_id', companyId)
-      .eq('experience_id', experienceId)
       .single();
 
     if (existing) {
@@ -215,11 +202,9 @@ export async function initializeUserSubscription(
 
     // Create new free subscription
     const { data: newSubscription, error: createError } = await supabase
-      .from('user_subscriptions')
+      .from('user_subscriptions_simple')
       .insert({
         user_id: userId,
-        company_id: companyId,
-        experience_id: experienceId,
         subscription_status: 'free'
       })
       .select()

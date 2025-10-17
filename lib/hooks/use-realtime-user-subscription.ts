@@ -6,8 +6,8 @@ import { initializeUserSubscription } from '@/lib/db/user-subscription-functions
 
 interface UseRealtimeUserSubscriptionProps {
   userId: string;
-  companyId: string;
-  experienceId?: string;
+  companyId: string; // Keep for poll filtering, but not for subscription
+  experienceId?: string; // Keep for poll filtering, but not for subscription
 }
 
 interface UserSubscriptionData {
@@ -116,13 +116,11 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
     try {
       setError(null);
       
-      // Fetch user subscription
+      // Fetch user subscription (user-based only)
       const { data: subscriptionData, error: subscriptionError } = await supabase
-        .from('user_subscriptions')
+        .from('user_subscriptions_simple')
         .select('*')
         .eq('user_id', userId)
-        .eq('company_id', companyId)
-        .eq('experience_id', experienceId || companyId)
         .single();
 
       // Calculate poll usage directly from polls table (more reliable)
@@ -141,13 +139,30 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
         console.error('Error fetching user polls:', pollsError);
       }
 
-      // If no subscription data found, try to initialize it
+      // If no subscription data found, initialize it with default free status
       let finalSubscriptionData = subscriptionData;
       if (!subscriptionData && subscriptionError?.code === 'PGRST116') {
         console.log('No subscription found, initializing user subscription...');
         try {
-          finalSubscriptionData = await initializeUserSubscription(userId, companyId, experienceId || companyId);
-          console.log('User subscription initialized:', finalSubscriptionData);
+          const { data: newSubscription, error: insertError } = await supabase
+            .from('user_subscriptions_simple')
+            .insert({
+              user_id: userId,
+              subscription_status: 'free',
+              plan_id: null,
+              access_pass_id: null,
+              subscription_started_at: null,
+              subscription_ends_at: null
+            })
+            .select()
+            .single();
+          
+          if (insertError) {
+            console.error('Error creating user subscription:', insertError);
+          } else {
+            finalSubscriptionData = newSubscription;
+            console.log('User subscription initialized:', finalSubscriptionData);
+          }
         } catch (initError) {
           console.error('Error initializing user subscription:', initError);
         }
@@ -187,7 +202,8 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
         subscription,
         isProUser,
         canCreatePoll,
-        pollsRemaining
+        pollsRemaining,
+        subscriptionQuery: `user_id=${userId} (user-based only)`
       });
 
       setData({
@@ -228,10 +244,22 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
     subscriptionsRef.current = [];
 
     // Create subscriptions for user subscription tables AND polls table
-    const tables = ['user_subscriptions', 'polls'];
+    const tables = ['user_subscriptions_simple', 'polls'];
     
     tables.forEach(table => {
-      const channelName = `user_subscription_${table}_changes_${userId}_${companyId}`;
+      const channelName = `user_subscription_${table}_changes_${userId}`;
+      const filter = table === 'polls' 
+        ? `company_id=eq.${companyId}` 
+        : `user_id=eq.${userId}`; // Much simpler - just user_id for subscription
+      
+      console.log(`Setting up real-time subscription for ${table}:`, {
+        channelName,
+        filter,
+        userId,
+        companyId,
+        experienceId
+      });
+      
       const subscription = supabase!
         .channel(channelName)
         .on(
@@ -240,7 +268,7 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
             event: '*',
             schema: 'public',
             table: table,
-            ...(table === 'polls' ? { filter: `company_id=eq.${companyId}` } : { filter: `user_id=eq.${userId}` })
+            filter: filter
           },
           (payload) => {
             console.log(`Real-time user subscription update from ${table}:`, payload);

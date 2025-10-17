@@ -16,13 +16,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    // Update user subscription to pro
+    // Update user subscription to pro (user-based only)
     const { data: subscriptionData, error: subscriptionError } = await supabase
-      .from('user_subscriptions')
+      .from('user_subscriptions_simple')
       .upsert({
         user_id: userId,
-        company_id: companyId,
-        experience_id: experienceId || companyId,
         subscription_status: 'pro',
         plan_id: planId || 'pro_plan',
         access_pass_id: accessPassId,
@@ -30,7 +28,7 @@ export async function POST(request: NextRequest) {
         subscription_ends_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'user_id,company_id,experience_id'
+        onConflict: 'user_id'
       })
       .select()
       .single();

@@ -10,9 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { PollCardProps } from '@/lib/types';
 
 export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumber = false, isHighlighted = false }: PollCardProps) {
-  const [selectedOption, setSelectedOption] = useState<string | null>(
-    poll.user_vote_option_id || null
-  );
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleVote = async (optionId: string) => {
@@ -25,18 +23,15 @@ export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumbe
     // Background sync - send to server without blocking UI
     setIsSubmitting(true);
     
-    // Use setTimeout to make it truly non-blocking
-    setTimeout(async () => {
-      try {
-        await onVote(optionId);
-      } catch (error) {
-        console.error('Background vote sync failed:', error);
-        // Don't revert - let real-time updates handle it
-        // Real-time updates will eventually sync correct data
-      } finally {
-        setIsSubmitting(false);
-      }
-    }, 0); // Execute in next tick - truly non-blocking
+    try {
+      await onVote(optionId);
+    } catch (error) {
+      console.error('Vote failed:', error);
+      // Don't revert - let real-time updates handle it
+      // Real-time updates will eventually sync correct data
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const status = getPollStatus(poll.expires_at);
@@ -76,7 +71,7 @@ export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumbe
             key={option.id}
             option={option}
             isSelected={selectedOption === option.id}
-            isVoted={poll.total_votes > 0} // Show percentages if anyone has voted
+            isVoted={selectedOption !== null} // Only show results after current user votes
             canVote={canVote}
             onVote={() => handleVote(option.id)}
             isVoting={isVoting || isSubmitting}
@@ -85,7 +80,7 @@ export function PollCard({ poll, onVote, isVoting = false, pollNumber, showNumbe
       </CardContent>
 
       {/* Footer */}
-      {poll.user_voted && (
+      {selectedOption && (
         <div className="flex items-center gap-3 px-4 sm:px-6 pb-4 sm:pb-6 border-t border-border">
           <div className="p-1.5 sm:p-2 bg-green-100 rounded-full">
             <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />

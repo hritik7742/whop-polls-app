@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { initializeUserSubscription } from '@/lib/db/user-subscription-functions';
 
 interface UseRealtimeUserSubscriptionProps {
   userId: string;
@@ -140,6 +141,18 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
         console.error('Error fetching user polls:', pollsError);
       }
 
+      // If no subscription data found, try to initialize it
+      let finalSubscriptionData = subscriptionData;
+      if (!subscriptionData && subscriptionError?.code === 'PGRST116') {
+        console.log('No subscription found, initializing user subscription...');
+        try {
+          finalSubscriptionData = await initializeUserSubscription(userId, companyId, experienceId || companyId);
+          console.log('User subscription initialized:', finalSubscriptionData);
+        } catch (initError) {
+          console.error('Error initializing user subscription:', initError);
+        }
+      }
+
       // Calculate usage from actual polls data
       const totalPollsCreated = pollsData?.length || 0;
       const activePollsCount = pollsData?.filter(poll => poll.status === 'active').length || 0;
@@ -153,7 +166,7 @@ export function useRealtimeUserSubscription({ userId, companyId, experienceId }:
         last_poll_created_at: lastPollCreatedAt
       };
 
-      const subscription = subscriptionData || {
+      const subscription = finalSubscriptionData || {
         subscription_status: 'free',
         plan_id: null,
         access_pass_id: null,

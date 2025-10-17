@@ -180,7 +180,7 @@ export function CreatePollDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full mx-4 sm:mx-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full mx-2 sm:mx-0 my-2 sm:my-0 p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Create Poll</DialogTitle>
           <DialogDescription>

@@ -31,11 +31,13 @@ export function VoteOption({
         onClick={canVote ? onVote : undefined}
         disabled={!canVote || isVoting}
       >
-        {/* Background fill based on vote percentage - show for all options */}
-        <div 
-          className="absolute inset-0 bg-primary/20 transition-all duration-500"
-          style={{ width: `${percentage}%` }}
-        />
+        {/* Background fill based on vote percentage - only show after voting */}
+        {isVoted && (
+          <div 
+            className="absolute inset-0 bg-primary/20 transition-all duration-500"
+            style={{ width: `${percentage}%` }}
+          />
+        )}
         
         <div className="flex items-center justify-between w-full relative z-10">
           <div className="flex items-center gap-3">
@@ -45,21 +47,25 @@ export function VoteOption({
             </span>
           </div>
           
-          {/* Vote count and percentage - show for all options */}
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground text-sm font-medium">
-              ({option.vote_count}) {percentage.toFixed(1)}%
-            </span>
-          </div>
+          {/* Vote count and percentage - only show after voting */}
+          {isVoted && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-sm font-medium">
+                ({option.vote_count}) {percentage.toFixed(1)}%
+              </span>
+            </div>
+          )}
         </div>
         
-        {/* Progress bar at bottom - show for all options */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted/30">
-          <div
-            className="h-full bg-primary transition-all duration-500"
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
+        {/* Progress bar at bottom - only show after voting */}
+        {isVoted && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted/30">
+            <div
+              className="h-full bg-primary transition-all duration-500"
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+        )}
       </Button>
     </div>
   );

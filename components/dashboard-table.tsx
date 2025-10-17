@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Poll } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { PollAnalyticsModal } from '@/components/poll-analytics-modal';
+import { DeletePollDialog } from '@/components/delete-poll-dialog';
 import { ReadMoreText } from '@/components/ui/read-more-text';
 
 interface DashboardTableProps {
@@ -23,6 +24,8 @@ export function DashboardTable({ polls, onDeletePoll, isDeleting = false }: Dash
   const [activeTab, setActiveTab] = useState('all');
   const [selectedPoll, setSelectedPoll] = useState<Poll | null>(null);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pollToDelete, setPollToDelete] = useState<Poll | null>(null);
 
   const filteredPolls = polls.filter(poll => {
     const matchesSearch = poll.question.toLowerCase().includes(searchQuery.toLowerCase());
@@ -39,9 +42,15 @@ export function DashboardTable({ polls, onDeletePoll, isDeleting = false }: Dash
     return matchesSearch && matchesTab;
   });
 
-  const handleDelete = async (pollId: string) => {
-    if (confirm('Are you sure you want to delete this poll?')) {
-      await onDeletePoll(pollId);
+  const handleDelete = (poll: Poll) => {
+    setPollToDelete(poll);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (pollToDelete) {
+      await onDeletePoll(pollToDelete.id);
+      setPollToDelete(null);
     }
   };
 
@@ -178,7 +187,7 @@ export function DashboardTable({ polls, onDeletePoll, isDeleting = false }: Dash
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDelete(poll.id)}
+                          onClick={() => handleDelete(poll)}
                           disabled={isDeleting}
                           className="text-destructive hover:text-destructive"
                         >
@@ -252,7 +261,7 @@ export function DashboardTable({ polls, onDeletePoll, isDeleting = false }: Dash
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDelete(poll.id)}
+                    onClick={() => handleDelete(poll)}
                     disabled={isDeleting}
                     className="text-destructive hover:text-destructive h-8 w-8"
                   >
@@ -270,6 +279,14 @@ export function DashboardTable({ polls, onDeletePoll, isDeleting = false }: Dash
         poll={selectedPoll}
         isOpen={isAnalyticsOpen}
         onClose={handleCloseAnalytics}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeletePollDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
       />
     </div>
   );

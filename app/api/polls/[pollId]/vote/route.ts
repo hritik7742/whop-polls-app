@@ -45,6 +45,7 @@ export async function POST(
     try {
       const result = await whopSdk.verifyUserToken(headersList);
       userId = result.userId;
+      console.log('🔐 User authenticated:', userId);
     } catch (tokenError) {
       console.error('Token verification failed:', tokenError);
       return NextResponse.json(
@@ -83,24 +84,32 @@ export async function POST(
       // First try to check experience access
       let accessResult;
       try {
-        accessResult = await whopSdk.access.checkIfUserHasAccessToExperience({
+        // Use the SDK with the specific user context
+        const userSdk = whopSdk.withUser(userId);
+        accessResult = await userSdk.access.checkIfUserHasAccessToExperience({
           userId,
           experienceId: poll.experience_id,
         });
+        console.log('🔍 Experience access check:', accessResult);
       } catch (experienceError) {
+        console.log('⚠️ Experience access failed, trying company access:', experienceError);
         // If experience access fails, try company access (for polls created from dashboard)
-        accessResult = await whopSdk.access.checkIfUserHasAccessToCompany({
+        const userSdk = whopSdk.withUser(userId);
+        accessResult = await userSdk.access.checkIfUserHasAccessToCompany({
           userId,
           companyId: poll.experience_id, // In dashboard polls, experience_id is actually companyId
         });
+        console.log('🔍 Company access check:', accessResult);
       }
 
       if (!accessResult.hasAccess) {
+        console.log('❌ User does not have access to vote on this poll');
         return NextResponse.json(
           { error: 'You do not have access to vote on this poll' },
           { status: 403 }
         );
       }
+      console.log('✅ User has access to vote on this poll');
     } catch (accessError) {
       console.error('Access check failed:', accessError);
       return NextResponse.json(

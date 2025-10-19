@@ -30,12 +30,15 @@ export async function POST(request: NextRequest) {
     // Verify user token - get from headers like in server components
     const headersList = request.headers;
     const { userId } = await whopSdk.verifyUserToken(headersList);
+    console.log('🔐 Poll creation - User authenticated:', userId);
 
     // Verify user has access to the company
-    const accessResult = await whopSdk.access.checkIfUserHasAccessToCompany({
+    const userSdk = whopSdk.withUser(userId);
+    const accessResult = await userSdk.access.checkIfUserHasAccessToCompany({
       userId,
       companyId: company_id,
     });
+    console.log('🔍 Poll creation - Company access check:', accessResult);
 
     if (!accessResult.hasAccess || accessResult.accessLevel !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

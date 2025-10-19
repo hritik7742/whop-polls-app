@@ -239,6 +239,8 @@ export async function createPoll(pollData: CreatePollData): Promise<Poll> {
 export async function voteOnPoll(pollId: string, optionId: string, userId: string): Promise<void> {
   const supabaseServer = createServerClient();
 
+  console.log('🗳️ voteOnPoll called:', { pollId, optionId, userId });
+
   // Use a transaction-like approach with error handling
   try {
     // Check if user already voted
@@ -255,6 +257,7 @@ export async function voteOnPoll(pollId: string, optionId: string, userId: strin
 
     if (existingVote) {
       // User has already voted - update their vote
+      console.log('🔄 User already voted, updating vote:', { existingVote, newOptionId: optionId });
       const oldOptionId = existingVote.option_id;
       
       // Update the vote to the new option
@@ -275,8 +278,10 @@ export async function voteOnPoll(pollId: string, optionId: string, userId: strin
         .rpc('increment_vote_count', { option_id: optionId });
 
       if (incrementError) throw incrementError;
+      console.log('✅ Vote updated successfully');
     } else {
       // User hasn't voted yet - insert new vote
+      console.log('➕ User voting for the first time, inserting new vote');
       const { error: voteError } = await supabaseServer
         .from('poll_votes')
         .insert({
@@ -285,13 +290,20 @@ export async function voteOnPoll(pollId: string, optionId: string, userId: strin
           user_id: userId
         });
 
-      if (voteError) throw voteError;
+      if (voteError) {
+        console.error('❌ Error inserting vote:', voteError);
+        throw voteError;
+      }
 
       // Update vote count using atomic increment
       const { error: countError } = await supabaseServer
         .rpc('increment_vote_count', { option_id: optionId });
 
-      if (countError) throw countError;
+      if (countError) {
+        console.error('❌ Error incrementing vote count:', countError);
+        throw countError;
+      }
+      console.log('✅ Vote inserted successfully');
     }
 
   } catch (error) {

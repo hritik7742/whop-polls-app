@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     // Verify user token
     const headersList = request.headers;
     const { userId: verifiedUserId } = await whopSdk.verifyUserToken(headersList);
+    console.log('🔐 User subscription - User authenticated:', verifiedUserId);
 
     if (verifiedUserId !== userId) {
       return NextResponse.json(

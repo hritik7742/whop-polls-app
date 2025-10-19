@@ -18,7 +18,7 @@ export function ExperienceView({
 	accessLevel,
 	polls: initialPolls,
 	userId,
-	headers,
+	headers, // Keep for backward compatibility but not used
 	highlightPollId
 }: ExperienceViewProps & { headers: Record<string, string> }) {
 	const [isVoting, setIsVoting] = useState(false);
@@ -201,9 +201,10 @@ export function ExperienceView({
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						...headers,
+						// Remove ...headers - let browser send cookies automatically
 					},
 					body: JSON.stringify({ option_id: optionId }),
+					credentials: 'include', // Ensure cookies are sent
 				});
 
 				if (!response.ok) {

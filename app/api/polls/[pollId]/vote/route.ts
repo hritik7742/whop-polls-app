@@ -41,13 +41,18 @@ export async function POST(
     // Verify user token - get from headers like in server components
     const headersList = request.headers;
     
+    // Log all headers for debugging
+    console.log('📋 All headers received:', Object.fromEntries(headersList.entries()));
+    
     let userId: string;
     try {
       const result = await whopSdk.verifyUserToken(headersList);
       userId = result.userId;
-      console.log('🔐 User authenticated:', userId);
+      console.log('🔐 User authenticated successfully:', userId);
+      console.log('🔐 Full verification result:', result);
     } catch (tokenError) {
-      console.error('Token verification failed:', tokenError);
+      console.error('❌ Token verification failed:', tokenError);
+      console.error('❌ Headers that caused the error:', Object.fromEntries(headersList.entries()));
       return NextResponse.json(
         { error: 'Authentication failed' },
         { status: 401 }
@@ -119,7 +124,9 @@ export async function POST(
     }
 
     // Vote on the poll
+    console.log('🗳️ About to save vote:', { pollId, option_id, userId });
     await voteOnPoll(pollId, option_id, userId);
+    console.log('✅ Vote saved successfully for user:', userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

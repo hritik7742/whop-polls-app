@@ -196,17 +196,37 @@ export function useRealtimeCrud({ companyId, experienceId, userId, initialPolls 
         pollQuery.eq('company_id', companyId);
       }
 
-      const [pollsResult, optionsResult, votesResult] = await Promise.all([
-        pollQuery,
-        supabase.from('poll_options').select('*').order('created_at', { ascending: true }).order('id', { ascending: true }),
-        supabase.from('poll_votes').select('*')
-      ]);
-
+      const pollsResult = await pollQuery;
+      
       if (pollsResult.error) {
         throw pollsResult.error;
       }
 
       const pollsData = pollsResult.data || [];
+      
+      // Early return if no polls
+      if (pollsData.length === 0) {
+        setPolls([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get poll IDs for filtering options and votes
+      const pollIds = pollsData.map(poll => poll.id);
+
+      const [optionsResult, votesResult] = await Promise.all([
+        supabase
+          .from('poll_options')
+          .select('*')
+          .in('poll_id', pollIds)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }),
+        supabase
+          .from('poll_votes')
+          .select('*')
+          .in('poll_id', pollIds)
+      ]);
+
       const optionsData = optionsResult.data || [];
       const votesData = votesResult.data || [];
       
